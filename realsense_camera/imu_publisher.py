@@ -1,116 +1,215 @@
 import rclpy
 import pyrealsense2 as rs
+from madgwickahrs import MadgwickAHRS
 from rclpy.node import Node
 from rclpy.clock import Clock
 
-from builtin_interfaces.msg import Time
 from std_msgs.msg import Header
 from sensor_msgs.msg import Imu
 from geometry_msgs.msg import Vector3
+from geometry_msgs.msg import Quaternion
 
 #! /usr/env/bin python
 
 class ImuPublisher(Node):
+    
 
     def __init__(self):
+        # ROS Publisher Initialization
         super().__init__('ImuPublisher')
         self.publisher = self.create_publisher(Imu, '/odom/Imu', 10)
 
+        # Camera Initialization
         self.pipeline = rs.pipeline()
         self.config = rs.config()
         self.config.enable_stream(rs.stream.accel)
         self.config.enable_stream(rs.stream.gyro)
         self.pipeline.start(self.config)
-        
-        counter = 0
-        acceleration_x = []
-        acceleration_y = []
-        acceleration_z = []
 
-        while counter < 1000:
-            frames = self.pipeline.wait_for_frames()
-
-            for frame in frames:
-                if frame.is_motion_frame():
-                    motion_data = frame.as_motion_frame().get_motion_data()
-                    if frame.profile.stream_type() == rs.stream.accel:
-                        acceleration_x.append(motion_data.x)
-                        acceleration_y.append(motion_data.y)
-                        acceleration_z.append(motion_data.z)
-                        counter += 1
-
-        self.acceleration_x_offset = sum(acceleration_x) / len(acceleration_x)
-        self.acceleration_y_offset = sum(acceleration_y) / len(acceleration_y)
-        self.acceleration_z_offset = sum(acceleration_z) / len(acceleration_z)
-
+        # ROS Timer setup
         timer_period = 0.5
         self.timer = self.create_timer(timer_period, self.timer_callback)
-
-    def timer_callback(self):
-
-        msg = Imu()
-        header = Header()
         
+        # Quaternion Initialization
+        self.madgwick = MadgwickAHRS()
+
+    def create_header(self, frame_id):
+        """Creates a header object for the message
+
+        Header:
+            stamp: Time message which has the seconds and nanoseconds since the epoch
+            frame_id: TF which the header is relevant to
+
+        Args:
+            frame_id (String): This is the transform which the message applies to
+
+        Returns:
+            Header: Header containing the timestamp and given frame_id
+        """
+
+        # Creates a timer for timestamps
         timer = Clock().now()
+        header = Header()
 
         header.stamp = timer.to_msg()
-        header.frame_id = "/odom/Imu"
+        header.frame_id = frame_id
 
-        msg.header = header
-        
+        return header
+    
+    def average_data(self, data):
+        """Takes a list of xyz data and gives the average of each
 
-        linear_acceleration_x = []
-        linear_acceleration_y = []
-        linear_acceleration_z = []
-        angular_velocity_x = []
-        angular_velocity_y = []
-        angular_velocity_z = []
+        Args:
+            data (tuple): Tuple list containing (x, y, z) values
 
+        Returns:
+            tuple: Tuple containing (x, y, z)
+        """
+        x_sum = 0
+        y_sum = 0
+        z_sum = 0
+        for item in data:
+            x_sum += item[0]
+            y_sum += item[1]
+            z_sum += item[2]
+
+        x = x_sum / len(data)
+        y = y_sum / len(data)
+        z = z_sum / len(data)
+
+        return (x, y, z)
+    
+    def create_vector3(self, data):
+        """Creates a vector object
+
+        Vector3:
+            This can contain multiple sets of information like
+            linear acceleration and angular velocity
+
+            x: X value
+            y: Y value
+            z: Z value
+
+        Args:
+            data (Tuple): Tuple containing (x, y, z)
+
+        Returns:
+            Vector: Vector which has x y z from the tuple
+        """
+        vector = Vector3()
+
+        vector.x = data[0]
+        vector.y = data[1]
+        vector.z = data[2]
+
+        return vector
+    
+    def update_quaternion(self):
+        """Creates a quaternion object which keeps track of the object's orientation
+
+        Quaternion:
+            This uses linear acceleration and angular velocity as well as the previous quaternion
+            to keep track of the entire position of the object
+
+            x: X value
+            y: Y value
+            z: Z value
+            w: W value
+
+        Returns:
+            Quaternion: Quaternion of the given acceleration and angular velocity
+        """
+        quaternion = Quaternion()
+
+        # Uses madgwick to calculate the quaternion
+        self.madgwick.update_imu(self.angular_velocity, self.linear_acceleration)
+
+        quaternion.w = self.madgwick.quaternion[0]
+        quaternion.x = self.madgwick.quaternion[1]
+        quaternion.y = self.madgwick.quaternion[2]
+        quaternion.z = self.madgwick.quaternion[3]
+
+        return quaternion
+    
+    def update_imu(self):
+        """Updates the IMU readings of linear_acceleration and angular velocity
+
+        Returns:
+            Tuple: Returns two tuples which contain the relevant IMU data
+        """
+        linear_acceleration = []
+        angular_velocity = []
+
+        # Read the current frames that the camera is seeing
         frames = self.pipeline.wait_for_frames()
 
+
         for frame in frames:
-            if frame.is_motion_frame():
-                motion_data = frame.as_motion_frame().get_motion_data()
-                
-                if frame.profile.stream_type() == rs.stream.accel:
-                    linear_acceleration_x.append(motion_data.x - self.acceleration_x_offset)
-                    linear_acceleration_y.append(motion_data.y - self.acceleration_y_offset)
-                    linear_acceleration_z.append(motion_data.z - self.acceleration_z_offset)
-                elif frame.profile.stream_type() == rs.stream.gyro:
-                    angular_velocity_x.append(motion_data.x)
-                    angular_velocity_y.append(motion_data.y)
-                    angular_velocity_z.append(motion_data.z)
+            # If it isn't a motion frame, ignore it
+            if not frame.is_motion_frame():
+                continue
 
-        linear_acceleration_x = sum(linear_acceleration_x) / len(linear_acceleration_x)
-        linear_acceleration_y = sum(linear_acceleration_y) / len(linear_acceleration_y)
-        linear_acceleration_z = sum(linear_acceleration_z) / len(linear_acceleration_z)
-        angular_velocity_x = sum(angular_velocity_x) / len(angular_velocity_x)
-        angular_velocity_y = sum(angular_velocity_y) / len(angular_velocity_y)
-        angular_velocity_z = sum(angular_velocity_z) / len(angular_velocity_z)
+            motion_data = frame.as_motion_frame().get_motion_data()
+            if frame.profile.stream_type() == rs.stream.accel:
+                linear_acceleration.append((motion_data.x, motion_data.y, motion_data.z))
+            elif frame.profile.stream_type() == rs.stream.gyro:
+                angular_velocity.append((motion_data.x, motion_data.y, motion_data.z))
 
-        angular_velocity = Vector3()
-        angular_velocity.x = angular_velocity_x
-        angular_velocity.y = angular_velocity_y
-        angular_velocity.z = angular_velocity_z
+        # Averages all the data and then returns that data
+        linear_acceleration = self.average_data(linear_acceleration)
+        angular_velocity = self.average_data(angular_velocity)
 
-        linear_acceleration = Vector3()
-        linear_acceleration.x = linear_acceleration_x
-        linear_acceleration.y = linear_acceleration_y
-        linear_acceleration.z = linear_acceleration_z
+        return linear_acceleration, angular_velocity
+    
+    def create_imu(self):
+        """Creates the IMU message which will be published
 
-        msg.angular_velocity = angular_velocity
-        msg.linear_acceleration = linear_acceleration
+        IMU:
+            Header: Header
+            Linear Acceleration: Vector3
+            Angular Velocity: Vector3
+            Quaternion: Quaternion
+            Linear Acceleration Covariance: 3x3 float[] 
+            Angular Velocity Covariance: 3x3 float[]
+            Quaternion Covariance: 3x3 float[]
 
+        Returns:
+            Imu: Holds all the IMU data listed above
+        """
+        default_covariance = [0.1, 0.0, 0.0, 
+                              0.0, 0.05, 0.0, 
+                              0.0, 0.0, 0.1]
+        
+        msg = Imu()
+        msg.header = self.create_header("camera_link")
+        msg.angular_velocity = self.create_vector3(self.angular_velocity)
+        msg.linear_acceleration = self.create_vector3(self.linear_acceleration)
+        msg.orientation = self.quaternion
+        msg.orientation_covariance = default_covariance
+        msg.angular_velocity_covariance = default_covariance
+        msg.linear_acceleration_covariance = default_covariance
+        
+        return msg
+
+    def timer_callback(self):
+        """
+        Repeated Function when the message is going on
+        """
+
+        # Grab data
+        self.linear_acceleration, self.angular_velocity = self.update_imu()
+        self.quaternion = self.update_quaternion()
+
+        # Create and publish the message
+        msg = self.create_imu()
         self.publisher.publish(msg)
-        
-        
+
+        # Print information for debugging purposes
         self.get_logger().info(f'LinearX: {msg.linear_acceleration.x}, LinearY: {msg.linear_acceleration.y}, LinearZ: {msg.linear_acceleration.z}')
         self.get_logger().info(f'AngularX: {msg.angular_velocity.x}, AngularY: {msg.angular_velocity.y}, AngularZ: {msg.angular_velocity.z}')
+        self.get_logger().info(f'QuaternionW: {msg.orientation.w}, QuaternionX: {msg.orientation.x}, QuaternionY: {msg.orientation.y}, QuaternionZ: {msg.orientation.z}')
         self.get_logger().info(f'Time: {msg.header.stamp.sec}.{msg.header.stamp.nanosec}')
         
-
-
-
 
 def main(args=None):
     rclpy.init(args=args)
