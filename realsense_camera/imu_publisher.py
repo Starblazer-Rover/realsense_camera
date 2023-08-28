@@ -130,6 +130,20 @@ class ImuPublisher(Node):
         quaternion.z = self.madgwick.quaternion[3]
 
         return quaternion
+
+    def optical_to_ros(self, axis):
+        """Changes the frame from the optical frame to REP103 which is what ROS uses
+           REP 103
+
+        Args:
+            axis (Tuple): A tuple which contains xyz coordinates in the camera frame
+
+        Returns:
+            _type_: A tuple which contains xyz coordinates in the REP103 frame
+        """
+        new_axis = (axis[2], -axis[0], -axis[1])
+
+        return new_axis
     
     def update_imu(self):
         """Updates the IMU readings of linear_acceleration and angular velocity
@@ -150,10 +164,12 @@ class ImuPublisher(Node):
                 continue
 
             motion_data = frame.as_motion_frame().get_motion_data()
+            motion_data = (motion_data.x, motion_data.y, motion_data.z)
+
             if frame.profile.stream_type() == rs.stream.accel:
-                linear_acceleration.append((motion_data.x, motion_data.y, motion_data.z))
+                linear_acceleration.append(self.optical_to_ros(motion_data))
             elif frame.profile.stream_type() == rs.stream.gyro:
-                angular_velocity.append((motion_data.x, motion_data.y, motion_data.z))
+                angular_velocity.append(self.optical_to_ros(motion_data))
 
         # Averages all the data and then returns that data
         linear_acceleration = self.average_data(linear_acceleration)
