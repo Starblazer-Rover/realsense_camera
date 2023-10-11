@@ -206,6 +206,12 @@ class ImuPublisher(Node):
         msg.linear_acceleration_covariance = default_covariance
         
         return msg
+    
+    def logger(self, msg):
+        self.get_logger().info(f'LinearX: {msg.linear_acceleration.x}, LinearY: {msg.linear_acceleration.y}, LinearZ: {msg.linear_acceleration.z}')
+        self.get_logger().info(f'AngularX: {msg.angular_velocity.x}, AngularY: {msg.angular_velocity.y}, AngularZ: {msg.angular_velocity.z}')
+        self.get_logger().info(f'QuaternionW: {msg.orientation.w}, QuaternionX: {msg.orientation.x}, QuaternionY: {msg.orientation.y}, QuaternionZ: {msg.orientation.z}')
+        self.get_logger().info(f'Time: {msg.header.stamp.sec}.{msg.header.stamp.nanosec}')
 
     def timer_callback(self):
         """
@@ -221,10 +227,7 @@ class ImuPublisher(Node):
         self.publisher.publish(msg)
 
         # Print information for debugging purposes
-        self.get_logger().info(f'LinearX: {msg.linear_acceleration.x}, LinearY: {msg.linear_acceleration.y}, LinearZ: {msg.linear_acceleration.z}')
-        self.get_logger().info(f'AngularX: {msg.angular_velocity.x}, AngularY: {msg.angular_velocity.y}, AngularZ: {msg.angular_velocity.z}')
-        self.get_logger().info(f'QuaternionW: {msg.orientation.w}, QuaternionX: {msg.orientation.x}, QuaternionY: {msg.orientation.y}, QuaternionZ: {msg.orientation.z}')
-        self.get_logger().info(f'Time: {msg.header.stamp.sec}.{msg.header.stamp.nanosec}')
+        #self.logger(msg)
         
 
 def main(args=None):
