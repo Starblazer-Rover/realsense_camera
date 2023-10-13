@@ -54,7 +54,7 @@ class ImagePublisher(Node):
 
             if color_frame:
                 image_data = np.asarray(color_frame.get_data())
-                msg = self.bridge.cv2_to_imgmsg(image_data, 'bgr8')
+                msg = self.bridge.cv2_to_compressed_imgmsg(image_data, 'jpg')
                 msg.header = self.create_header('camera_link')
                 self.publisher.publish(msg)
                 self.get_logger().info(f'camera working')
