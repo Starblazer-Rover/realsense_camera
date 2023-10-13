@@ -6,13 +6,13 @@ import numpy as np
 
 import pyrealsense2 as rs
 
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CompressedImage
 from std_msgs.msg import Header
 
 class ImagePublisher(Node):
     def __init__(self):
         super().__init__('image_publisher')
-        self.publisher = self.create_publisher(Image, '/camera/raw_image', 10)
+        self.publisher = self.create_publisher(CompressedImage, '/camera/compressed_image', 10)
         self.bridge = CvBridge()
 
         self.pipeline = rs.pipeline()
@@ -20,7 +20,7 @@ class ImagePublisher(Node):
         self.pipeline.start()
         self.config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
 
-        timer_period = 0.5
+        timer_period = 1 / 30
         self.timer = self.create_timer(timer_period, self.timer_callback)
         
     def create_header(self, frame_id):
@@ -54,10 +54,10 @@ class ImagePublisher(Node):
 
             if color_frame:
                 image_data = np.asarray(color_frame.get_data())
-                msg = self.bridge.cv2_to_imgmsg(image_data, encoding='bgr8')
+                msg = self.bridge.cv2_to_imgmsg(image_data, 'bgr8')
                 msg.header = self.create_header('camera_link')
                 self.publisher.publish(msg)
-                self.get_logger().info(f'Camera working')
+                self.get_logger().info(f'camera working')
 
         except Exception as e:
             self.get_logger().error(f"Error capturing and publishing image: {str(e)}")
