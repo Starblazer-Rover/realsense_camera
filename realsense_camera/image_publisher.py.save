@@ -13,16 +13,15 @@ from std_msgs.msg import Header
 class ImagePublisher(Node):
     def __init__(self):
         super().__init__('image_publisher')
-        self.publisher = self.create_publisher(CompressedImage, '/camera/compressed_image', 1)
+        self.publisher = self.create_publisher(CompressedImage, '/camera/compressed_image', 100)
         self.bridge = CvBridge()
 
         self.pipeline = rs.pipeline()
         self.config = rs.config()
         self.pipeline.start()
-        self.config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 60)
+        self.config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 15)
 
-        timer_period = 0.0001
-        self.counter = 0
+        timer_period = 1 / 15
         self.timer = self.create_timer(timer_period, self.timer_callback)
         
     def create_header(self, frame_id):
@@ -58,17 +57,20 @@ class ImagePublisher(Node):
                 image_data = np.asarray(color_frame.get_data())
 
                 msg = self.bridge.cv2_to_compressed_imgmsg(image_data, 'jpg')
-                if self.counter == 2.5:
-                    self.create_header('camera_link')
-                    self.publisher.publish(msg)
-                    self.counter = 0
-                else:
-                    self.counter += 0.5
+
+                msg.header = self.create_header('camera_link')
+                self.publisher.publish(msg)
+                self.get_logger().info(f'camera working')
 
         except Exception as e:
             self.get_logger().error(f"Error capturing and publishing image: {str(e)}")
 
-
+if self.counter == 15:
+            self.publisher.publish(msg)
+            self.get_logger().info(f'Publishing: {msg.data}')
+            self.counter = 0
+        else:
+            self.counter += 1
 def main(args=None):
     rclpy.init(args=args) 
 
