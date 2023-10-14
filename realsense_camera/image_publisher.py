@@ -2,6 +2,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.clock import Clock
 from cv_bridge import CvBridge
+import cv2
 import numpy as np
 
 import pyrealsense2 as rs
@@ -54,7 +55,9 @@ class ImagePublisher(Node):
 
             if color_frame:
                 image_data = np.asarray(color_frame.get_data())
+
                 msg = self.bridge.cv2_to_compressed_imgmsg(image_data, 'jpg')
+
                 msg.header = self.create_header('camera_link')
                 self.publisher.publish(msg)
                 self.get_logger().info(f'camera working')
@@ -64,7 +67,7 @@ class ImagePublisher(Node):
 
 
 def main(args=None):
-    rclpy.init(args=args)
+    rclpy.init(args=args) 
 
     image_publisher = ImagePublisher()
 
