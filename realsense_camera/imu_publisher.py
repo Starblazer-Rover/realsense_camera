@@ -227,7 +227,7 @@ class ImuPublisher(Node):
         self.publisher.publish(msg)
 
         # Print information for debugging purposes
-        #self.logger(msg)
+        self.logger(msg)
         
 
 def main(args=None):
