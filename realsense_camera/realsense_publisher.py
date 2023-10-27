@@ -39,6 +39,7 @@ class RealsensePublisher(Node):
         frames = self.pipeline.wait_for_frames()
 
         color_frame = frames.get_color_frame()
+        motion_frame = frames.get_motion_frame()
         accel_frame = frames.get_accel_frame()
         gyro_frame = frames.get_gyro_frame()
         depth_frame = frames.get_depth_frame()
