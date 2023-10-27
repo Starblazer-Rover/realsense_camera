@@ -1,11 +1,9 @@
 from rclpy.clock import Clock
 from cv_bridge import CvBridge
-import cv2
 import numpy as np
 
 import pyrealsense2 as rs
 
-from sensor_msgs.msg import CompressedImage
 from std_msgs.msg import Header
 
 class ImagePublisher():

@@ -3,7 +3,6 @@ import pyrealsense2 as rs
 import numpy as np
 
 from sensor_msgs_py import point_cloud2 as pc2
-from sensor_msgs.msg import PointCloud2, PointField
 from std_msgs.msg import Header
 
 class PointCloudPublisher():

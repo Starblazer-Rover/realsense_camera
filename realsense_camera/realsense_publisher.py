@@ -6,7 +6,7 @@ from image_publisher import ImagePublisher
 from imu_publisher import ImuPublisher
 from pointcloud_publisher import PointCloudPublisher
 
-from sensor_msgs.msg import CompressedImage, Imu, PointCloud2, PointField
+from sensor_msgs.msg import CompressedImage, Imu, PointCloud2
 
 class RealsensePublisher(Node):
     

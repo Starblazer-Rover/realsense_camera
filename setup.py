@@ -20,8 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'imu = realsense_camera.imu_publisher:main',
-            'image = realsense_camera.image_publisher:main',
+            'camera = realsense_camera.realsense_publisher:main',
             'uncompress = realsense_camera.uncompress_image:main'
         ],
     },
