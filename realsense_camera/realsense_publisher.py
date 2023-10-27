@@ -40,7 +40,7 @@ class RealsensePublisher(Node):
 
         color_frame = frames.get_color_frame()
         accel_frame = frames.first_or_default(rs.stream.accel)
-        gyro_frame = frames.get_gyro_frame()
+        gyro_frame = frames.first_or_default(rs.stream.gyro)
         depth_frame = frames.get_depth_frame()
 
 
