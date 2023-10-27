@@ -1,6 +1,5 @@
-import rclpy
-import pyrealsense2 as rs
 from madgwickahrs import MadgwickAHRS
+import pyrealsense2 as rs
 from rclpy.node import Node
 from rclpy.clock import Clock
 
@@ -15,25 +14,10 @@ class ImuPublisher(Node):
     
 
     def __init__(self):
-        # ROS Publisher Initialization
-        super().__init__('ImuPublisher')
-        self.publisher = self.create_publisher(Imu, '/odom/Imu', 10)
-
-        # Camera Initialization
-        self.pipeline = rs.pipeline()
-        self.config = rs.config()
-        self.config.enable_stream(rs.stream.accel)
-        self.config.enable_stream(rs.stream.gyro)
-        self.pipeline.start(self.config)
-
-        # ROS Timer setup
-        timer_period = 0.5
-        self.timer = self.create_timer(timer_period, self.timer_callback)
-        
         # Quaternion Initialization
         self.madgwick = MadgwickAHRS()
 
-    def read_calibration(self, file_path):
+    def __read_calibration(self, file_path):
         try:
             with open(file_path, "r") as file:
                 data = file.read().split("\n")
@@ -41,16 +25,14 @@ class ImuPublisher(Node):
                 linear_acceleration = data[0].split(" ")
                 angular_velocity = data[1].split(" ")
 
-                self.linear_acceleration_offset = [float(linear_acceleration[0]), float(linear_acceleration[1]), float(linear_acceleration[2])]
-                self.angular_velocity_offset = [float(angular_velocity[0]), float(angular_velocity[1]), float(angular_velocity[2])]  
+                self.linear_offset = [float(linear_acceleration[0]), float(linear_acceleration[1]), float(linear_acceleration[2])]
+                self.angular_offset = [float(angular_velocity[0]), float(angular_velocity[1]), float(angular_velocity[2])]  
         except FileNotFoundError:
             "File Not found"
         except Exception as e:
             print(e)
-        
 
-
-    def create_header(self, frame_id):
+    def __create_header(self, frame_id):
         """Creates a header object for the message
 
         Header:
@@ -73,7 +55,7 @@ class ImuPublisher(Node):
 
         return header
     
-    def average_data(self, data):
+    def __average_data(self, data):
         """Takes a list of xyz data and gives the average of each
 
         Args:
@@ -96,7 +78,7 @@ class ImuPublisher(Node):
 
         return [x, y, z]
     
-    def create_vector3(self, data):
+    def __create_vector3(self, data):
         """Creates a vector object
 
         Vector3:
@@ -121,7 +103,7 @@ class ImuPublisher(Node):
 
         return vector
     
-    def update_quaternion(self):
+    def __update_quaternion(self):
         """Creates a quaternion object which keeps track of the object's orientation
 
         Quaternion:
@@ -148,7 +130,7 @@ class ImuPublisher(Node):
 
         return quaternion
 
-    def optical_to_ros(self, axis):
+    def __optical_to_ros(self, axis):
         """Changes the frame from the optical frame to REP103 which is what ROS uses
            REP 103
 
@@ -162,7 +144,7 @@ class ImuPublisher(Node):
 
         return new_axis
     
-    def update_imu(self):
+    def __update_imu(self, accel_frame, gyro_frame):
         """Updates the IMU readings of linear_acceleration and angular velocity
 
         Returns:
@@ -171,37 +153,24 @@ class ImuPublisher(Node):
         linear_acceleration = []
         angular_velocity = []
 
-        # Read the current frames that the camera is seeing
-        frames = self.pipeline.wait_for_frames()
+        accel_data = accel_frame.get_motion_data()
+        gyro_data = gyro_frame.get_motion_data()
 
+        
 
-        for frame in frames:
-            # If it isn't a motion frame, ignore it
-            if not frame.is_motion_frame():
-                continue
+        linear_acceleration = [accel_data.x, accel_data.y, accel_data.z]
+        angular_velocity = [gyro_data.x, gyro_data.y, gyro_data.z]
 
-            motion_data = frame.as_motion_frame().get_motion_data()
-            motion_data = [motion_data.x, motion_data.y, motion_data.z]
-
-            if frame.profile.stream_type() == rs.stream.accel:
-                linear_acceleration.append(self.optical_to_ros(motion_data))
-            elif frame.profile.stream_type() == rs.stream.gyro:
-                angular_velocity.append(self.optical_to_ros(motion_data))
-
-        # Averages all the data and then returns that data
-        linear_acceleration = self.average_data(linear_acceleration)
-        angular_velocity = self.average_data(angular_velocity) 
+        biased_linear_acceleration = self.__optical_to_ros(linear_acceleration)
+        biased_angular_velocity = self.__optical_to_ros(angular_velocity)
 
         for i in range(3):
-            linear_acceleration[i] -= self.linear_acceleration_offset[i]
-            angular_velocity[i] -= self.angular_velocity_offset[i]
+            biased_linear_acceleration[i] -= self.linear_offset[i]
+            biased_angular_velocity[i] -= self.angular_offset[i]
 
-            linear_acceleration[i] = float("{:.1f}".format(linear_acceleration[i]))
-            angular_velocity[i] = float("{:.1f}".format(angular_velocity[i]))
-
-        return linear_acceleration, angular_velocity
+        return biased_linear_acceleration, biased_angular_velocity
     
-    def create_imu(self):
+    def create_imu(self, frames):
         """Creates the IMU message which will be published
 
         IMU:
@@ -216,57 +185,23 @@ class ImuPublisher(Node):
         Returns:
             Imu: Holds all the IMU data listed above
         """
+
+        self.__read_calibration("/home/billee/billee_ws/src/realsense_camera/resource/imu_calibration.dat")
+        self.linear_acceleration, self.angular_velocity = self.__update_imu(frames)
+        self.quaternion = self.__update_quaternion()
+        
         default_covariance = [0.1, 0.0, 0.0, 
                               0.0, 0.1, 0.0, 
                               0.0, 0.0, 0.1]
         
         msg = Imu()
-        msg.header = self.create_header("camera_link")
-        msg.angular_velocity = self.create_vector3(self.angular_velocity)
-        msg.linear_acceleration = self.create_vector3(self.linear_acceleration)
+        msg.header = self.__create_header("camera_link")
+        msg.angular_velocity = self.__create_vector3(self.angular_velocity)
+        msg.linear_acceleration = self.__create_vector3(self.linear_acceleration)
         msg.orientation = self.quaternion
         msg.orientation_covariance = default_covariance
         msg.angular_velocity_covariance = default_covariance
         msg.linear_acceleration_covariance = default_covariance
         
         return msg
-    
-    def logger(self, msg):
-        self.get_logger().info(f'LinearX: {msg.linear_acceleration.x}, LinearY: {msg.linear_acceleration.y}, LinearZ: {msg.linear_acceleration.z}')
-        self.get_logger().info(f'AngularX: {msg.angular_velocity.x}, AngularY: {msg.angular_velocity.y}, AngularZ: {msg.angular_velocity.z}')
-        self.get_logger().info(f'QuaternionW: {msg.orientation.w}, QuaternionX: {msg.orientation.x}, QuaternionY: {msg.orientation.y}, QuaternionZ: {msg.orientation.z}')
-        self.get_logger().info(f'Time: {msg.header.stamp.sec}.{msg.header.stamp.nanosec}')
 
-    def timer_callback(self):
-        """
-        Repeated Function when the message is going on
-        """
-
-        # Grab data
-        self.read_calibration("/home/billee/billee_ws/src/realsense_camera/resource/imu_calibration.dat")
-        self.linear_acceleration, self.angular_velocity = self.update_imu()
-        self.quaternion = self.update_quaternion()
-
-        # Create and publish the message
-        msg = self.create_imu()
-        self.publisher.publish(msg)
-
-        # Print information for debugging purposes
-        self.logger(msg)
-        
-
-def main(args=None):
-    rclpy.init(args=args)
-
-    imu_publisher = ImuPublisher()
-
-    rclpy.spin(imu_publisher)
-
-    imu_publisher.pipeline.shutdown()
-    imu_publisher.destroy_node()
-
-    rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()

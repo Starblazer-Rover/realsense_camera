@@ -1,5 +1,3 @@
-import rclpy
-from rclpy.node import Node
 from rclpy.clock import Clock
 from cv_bridge import CvBridge
 import cv2
@@ -10,20 +8,9 @@ import pyrealsense2 as rs
 from sensor_msgs.msg import CompressedImage
 from std_msgs.msg import Header
 
-class ImagePublisher(Node):
+class ImagePublisher():
     def __init__(self):
-        super().__init__('image_publisher')
-        self.publisher = self.create_publisher(CompressedImage, '/camera/compressed_image', 1)
         self.bridge = CvBridge()
-
-        self.pipeline = rs.pipeline()
-        self.config = rs.config()
-        self.pipeline.start()
-        self.config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 60)
-
-        timer_period = 0.0001
-        self.counter = 0
-        self.timer = self.create_timer(timer_period, self.timer_callback)
         
     def create_header(self, frame_id):
         """Creates a header object for the message
@@ -48,37 +35,11 @@ class ImagePublisher(Node):
 
         return header
     
-    def timer_callback(self):
+    def create_image(self, color_frame):
 
-        try:
-            frames = self.pipeline.wait_for_frames()
-            color_frame = frames.get_color_frame()
+        image_data = np.asarray(color_frame.get_data())
 
-            if color_frame:
-                image_data = np.asarray(color_frame.get_data())
+        msg = self.bridge.cv2_to_compressed_imgmsg(image_data, 'jpg')
+        msg.header = self.create_header('camera_link')
 
-                msg = self.bridge.cv2_to_compressed_imgmsg(image_data, 'jpg')
-                if self.counter == 2.5:
-                    self.create_header('camera_link')
-                    self.publisher.publish(msg)
-                    self.counter = 0
-                else:
-                    self.counter += 0.5
-
-        except Exception as e:
-            self.get_logger().error(f"Error capturing and publishing image: {str(e)}")
-
-
-def main(args=None):
-    rclpy.init(args=args) 
-
-    image_publisher = ImagePublisher()
-
-    rclpy.spin(image_publisher)
-
-    image_publisher.destroy_node()
-    rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()
+        return msg

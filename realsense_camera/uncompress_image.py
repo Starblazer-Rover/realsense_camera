@@ -12,7 +12,7 @@ class ImageSubscriber(Node):
 
   def image_callback(self, msg):
     try:
-      cv_image = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='bgr8')
+      cv_image = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='rgb8')
       
       cv_image = self.bridge.cv2_to_imgmsg(cv_image, 'rgb8')
 
