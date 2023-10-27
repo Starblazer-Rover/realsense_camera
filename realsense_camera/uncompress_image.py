@@ -14,9 +14,10 @@ class ImageSubscriber(Node):
     try:
       cv_image = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='bgr8')
       
-      cv_image = self.bridge.cv2_to_imgmsg(msg, 'bgr8')
+      cv_image = self.bridge.cv2_to_imgmsg(cv_image, 'rgb8')
 
       self.publisher.publish(cv_image)
+
     except Exception as e:
       self.get_logger().error('Error processing image: %s' % str(e))
 
