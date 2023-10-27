@@ -33,6 +33,23 @@ class ImuPublisher(Node):
         # Quaternion Initialization
         self.madgwick = MadgwickAHRS()
 
+    def read_calibration(self, file_path):
+        try:
+            with open(file_path, "r") as file:
+                data = file.read().split("\n")
+
+                linear_acceleration = data[0].split(" ")
+                angular_velocity = data[1].split(" ")
+
+                self.linear_acceleration_offset = [float(linear_acceleration[0]), float(linear_acceleration[1]), float(linear_acceleration[2])]
+                self.angular_velocity_offset = [float(angular_velocity[0]), float(angular_velocity[1]), float(angular_velocity[2])]  
+        except FileNotFoundError:
+            "File Not found"
+        except Exception as e:
+            print(e)
+        
+
+
     def create_header(self, frame_id):
         """Creates a header object for the message
 
@@ -77,7 +94,7 @@ class ImuPublisher(Node):
         y = y_sum / len(data)
         z = z_sum / len(data)
 
-        return (x, y, z)
+        return [x, y, z]
     
     def create_vector3(self, data):
         """Creates a vector object
@@ -124,10 +141,10 @@ class ImuPublisher(Node):
         # Uses madgwick to calculate the quaternion
         self.madgwick.update_imu(self.angular_velocity, self.linear_acceleration)
 
-        quaternion.w = self.madgwick.quaternion[0]
-        quaternion.x = self.madgwick.quaternion[1]
-        quaternion.y = self.madgwick.quaternion[2]
-        quaternion.z = self.madgwick.quaternion[3]
+        quaternion.w = float(self.madgwick.quaternion[0])
+        quaternion.x = float(self.madgwick.quaternion[1])
+        quaternion.y = float(self.madgwick.quaternion[2])
+        quaternion.z = float(self.madgwick.quaternion[3])
 
         return quaternion
 
@@ -141,7 +158,7 @@ class ImuPublisher(Node):
         Returns:
             _type_: A tuple which contains xyz coordinates in the REP103 frame
         """
-        new_axis = (axis[2], -axis[0], -axis[1])
+        new_axis = [axis[2], -axis[0], -axis[1]]
 
         return new_axis
     
@@ -164,7 +181,7 @@ class ImuPublisher(Node):
                 continue
 
             motion_data = frame.as_motion_frame().get_motion_data()
-            motion_data = (motion_data.x, motion_data.y, motion_data.z)
+            motion_data = [motion_data.x, motion_data.y, motion_data.z]
 
             if frame.profile.stream_type() == rs.stream.accel:
                 linear_acceleration.append(self.optical_to_ros(motion_data))
@@ -173,7 +190,14 @@ class ImuPublisher(Node):
 
         # Averages all the data and then returns that data
         linear_acceleration = self.average_data(linear_acceleration)
-        angular_velocity = self.average_data(angular_velocity)
+        angular_velocity = self.average_data(angular_velocity) 
+
+        for i in range(3):
+            linear_acceleration[i] -= self.linear_acceleration_offset[i]
+            angular_velocity[i] -= self.angular_velocity_offset[i]
+
+            linear_acceleration[i] = float("{:.1f}".format(linear_acceleration[i]))
+            angular_velocity[i] = float("{:.1f}".format(angular_velocity[i]))
 
         return linear_acceleration, angular_velocity
     
@@ -193,7 +217,7 @@ class ImuPublisher(Node):
             Imu: Holds all the IMU data listed above
         """
         default_covariance = [0.1, 0.0, 0.0, 
-                              0.0, 0.05, 0.0, 
+                              0.0, 0.1, 0.0, 
                               0.0, 0.0, 0.1]
         
         msg = Imu()
@@ -219,6 +243,7 @@ class ImuPublisher(Node):
         """
 
         # Grab data
+        self.read_calibration("/home/billee/billee_ws/src/realsense_camera/resource/imu_calibration.dat")
         self.linear_acceleration, self.angular_velocity = self.update_imu()
         self.quaternion = self.update_quaternion()
 
