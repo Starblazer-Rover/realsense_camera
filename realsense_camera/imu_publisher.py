@@ -1,6 +1,5 @@
 from madgwickahrs import MadgwickAHRS
 import pyrealsense2 as rs
-from rclpy.node import Node
 from rclpy.clock import Clock
 
 from std_msgs.msg import Header
@@ -10,9 +9,8 @@ from geometry_msgs.msg import Quaternion
 
 #! /usr/env/bin python
 
-class ImuPublisher(Node):
+class ImuPublisher():
     
-
     def __init__(self):
         # Quaternion Initialization
         self.madgwick = MadgwickAHRS()
@@ -153,8 +151,8 @@ class ImuPublisher(Node):
         linear_acceleration = []
         angular_velocity = []
 
-        accel_data = accel_frame.get_motion_data()
-        gyro_data = gyro_frame.get_motion_data()
+        accel_data = accel_frame.as_motion_frame().get_motion_data()
+        gyro_data = gyro_frame.as_motion_frame().get_motion_data()
 
         
 
@@ -170,7 +168,7 @@ class ImuPublisher(Node):
 
         return biased_linear_acceleration, biased_angular_velocity
     
-    def create_imu(self, frames):
+    def create_imu(self, accel_frame, gyro_frame):
         """Creates the IMU message which will be published
 
         IMU:
@@ -187,7 +185,7 @@ class ImuPublisher(Node):
         """
 
         self.__read_calibration("/home/billee/billee_ws/src/realsense_camera/resource/imu_calibration.dat")
-        self.linear_acceleration, self.angular_velocity = self.__update_imu(frames)
+        self.linear_acceleration, self.angular_velocity = self.__update_imu(accel_frame, gyro_frame)
         self.quaternion = self.__update_quaternion()
         
         default_covariance = [0.1, 0.0, 0.0, 

@@ -51,9 +51,12 @@ class RealsensePublisher(Node):
         else:
             self.image_counter += 1
 
-        if self.imu_counter == 50:
+        if self.imu_counter == 4:
             msg = self.imu.create_imu(accel_frame, gyro_frame)
             self.__imu_publisher.publish(msg)
+            self.get_logger().info("work")
+            #self.get_logger().info(f'{msg.linear_acceleration.x}, {msg.linear_acceleration.y}, {msg.linear_acceleration.z}')
+            #self.get_logger().info(f'{msg.angular_velocity.x}, {msg.angular_velocity.y}, {msg.angular_velocity.z}')
             self.imu_counter = 0
         else:
             self.imu_counter += 1
