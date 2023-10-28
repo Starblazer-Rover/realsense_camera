@@ -53,29 +53,6 @@ class ImuPublisher():
 
         return header
     
-    def __average_data(self, data):
-        """Takes a list of xyz data and gives the average of each
-
-        Args:
-            data (tuple): Tuple list containing (x, y, z) values
-
-        Returns:
-            tuple: Tuple containing (x, y, z)
-        """
-        x_sum = 0
-        y_sum = 0
-        z_sum = 0
-        for item in data:
-            x_sum += item[0]
-            y_sum += item[1]
-            z_sum += item[2]
-
-        x = x_sum / len(data)
-        y = y_sum / len(data)
-        z = z_sum / len(data)
-
-        return [x, y, z]
-    
     def __create_vector3(self, data):
         """Creates a vector object
 
