@@ -12,9 +12,9 @@ class RealsensePublisher(Node):
     
     def __init__(self):
         super().__init__('realsense_publisher')
-        self.__image_publisher = self.create_publisher(CompressedImage, '/camera/compressed_image', 1)
-        self.__imu_publisher = self.create_publisher(Imu, '/odom/imu', 10)
-        self.__pointcloud_publisher = self.create_publisher(PointCloud2, '/camera/pointcloud2', 10)
+        self.__image_publisher = self.create_publisher(CompressedImage, '/camera/CompressedImage', 1)
+        self.__imu_publisher = self.create_publisher(Imu, '/odom/Imu', 10)
+        self.__pointcloud_publisher = self.create_publisher(PointCloud2, '/camera/PointCloud2', 10)
 
         self.image = ImagePublisher()
         self.imu = ImuPublisher()
@@ -51,10 +51,9 @@ class RealsensePublisher(Node):
         else:
             self.image_counter += 1
 
-        if self.imu_counter == 4:
+        if self.imu_counter == 1:
             msg = self.imu.create_imu(accel_frame, gyro_frame)
             self.__imu_publisher.publish(msg)
-            self.get_logger().info("work")
             #self.get_logger().info(f'{msg.linear_acceleration.x}, {msg.linear_acceleration.y}, {msg.linear_acceleration.z}')
             #self.get_logger().info(f'{msg.angular_velocity.x}, {msg.angular_velocity.y}, {msg.angular_velocity.z}')
             self.imu_counter = 0

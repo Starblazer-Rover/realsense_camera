@@ -6,8 +6,8 @@ from cv_bridge import CvBridge
 class ImageSubscriber(Node):
   def __init__(self):
     super().__init__('image_node')
-    self.publisher = self.create_publisher(Image, '/camera/raw_image', 1)
-    self.subscription = self.create_subscription(CompressedImage, '/camera/compressed_image', self.image_callback, 1)
+    self.publisher = self.create_publisher(Image, '/camera/RawImage', 1)
+    self.subscription = self.create_subscription(CompressedImage, '/camera/CompressedImage', self.image_callback, 1)
     self.bridge = CvBridge()
 
   def image_callback(self, msg):
