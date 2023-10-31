@@ -117,6 +117,8 @@ class ImuPublisher():
         """
         new_axis = [axis[2], -axis[0], -axis[1]]
 
+        new_axis = [axis[0], axis[1], axis[2]]
+
         return new_axis
     
     def __update_imu(self, accel_frame, gyro_frame):
@@ -133,8 +135,8 @@ class ImuPublisher():
 
         
 
-        linear_acceleration = [accel_data.x, accel_data.y, accel_data.z]
-        angular_velocity = [gyro_data.x, gyro_data.y, gyro_data.z]
+        linear_acceleration = [accel_data.x / 100, accel_data.y / 100, accel_data.z / 100]
+        angular_velocity = [gyro_data.x / 100, gyro_data.y / 100, gyro_data.z / 100]
 
         biased_linear_acceleration = self.__optical_to_ros(linear_acceleration)
         biased_angular_velocity = self.__optical_to_ros(angular_velocity)
@@ -144,6 +146,18 @@ class ImuPublisher():
             biased_angular_velocity[i] -= self.angular_offset[i]
 
         return biased_linear_acceleration, biased_angular_velocity
+    
+    def __if_accel_zero(self):
+        for i in range(3):
+            if self.linear_acceleration[i] > 0.001 or self.angular_velocity[i] > 0.001:
+                return False
+            
+        return True
+    
+    def __isnt_moving(self):
+        for i in range(3):
+            self.linear_acceleration[i] = 0.0
+            self.angular_velocity[i] = 0.0
     
     def create_imu(self, accel_frame, gyro_frame):
         """Creates the IMU message which will be published
@@ -163,6 +177,10 @@ class ImuPublisher():
 
         self.__read_calibration("/home/billee/billee_ws/src/realsense_camera/resource/imu_calibration.dat")
         self.linear_acceleration, self.angular_velocity = self.__update_imu(accel_frame, gyro_frame)
+
+        if self.__if_accel_zero():
+            self.__isnt_moving()
+
         self.quaternion = self.__update_quaternion()
         
         default_covariance = [0.1, 0.0, 0.0, 
