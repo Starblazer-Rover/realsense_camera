@@ -20,6 +20,10 @@ class RealsensePublisher(Node):
         self.imu = ImuPublisher()
         self.pointcloud = PointCloudPublisher()
 
+        self.first_time_sec = 0
+        self.first_time_nanosec = 0
+        self.first_time = 0.0
+
         self.pipeline = rs.pipeline()
         self.config = rs.config()
         self.config.enable_stream(rs.stream.accel)
@@ -51,18 +55,27 @@ class RealsensePublisher(Node):
         else:
             self.image_counter += 1
 
-        if self.imu_counter == 1:
+        if self.imu_counter == 0:
             msg = self.imu.create_imu(accel_frame, gyro_frame)
             self.__imu_publisher.publish(msg)
-            #self.get_logger().info(f'{msg.linear_acceleration.x}, {msg.linear_acceleration.y}, {msg.linear_acceleration.z}')
+            self.get_logger().info(f'{msg.linear_acceleration.x}, {msg.linear_acceleration.y}, {msg.linear_acceleration.z}')
             #self.get_logger().info(f'{msg.angular_velocity.x}, {msg.angular_velocity.y}, {msg.angular_velocity.z}')
             self.imu_counter = 0
+
+            """
+            if self.first_time == 0:
+                self.first_time = msg.header.stamp.sec + (msg.header.stamp.nanosec / 1000000000)
+            else:
+
+                self.get_logger().info(f'{(msg.header.stamp.sec + (msg.header.stamp.nanosec / 1000000000)) - self.first_time}')
+                self.first_time = msg.header.stamp.sec + (msg.header.stamp.nanosec / 1000000000)
+            """
         else:
             self.imu_counter += 1
 
         if self.pointcloud_counter == 5:
-            msg = self.pointcloud.create_pointcloud(depth_frame)
-            self.__pointcloud_publisher.publish(msg)
+            #msg = self.pointcloud.create_pointcloud(depth_frame)
+            #self.__pointcloud_publisher.publish(msg)
             self.pointcloud_counter = 0
         else:
             self.pointcloud_counter += 1

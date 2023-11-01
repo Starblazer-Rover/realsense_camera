@@ -12,8 +12,6 @@ def optical_to_ros(axis):
     """
     new_axis = (axis[2], -axis[0], -axis[1])
 
-    new_axis = (axis[0], axis[1], axis[2])
-
     return new_axis
 
 def average_data(data):
@@ -54,13 +52,13 @@ def main():
 
     frames = pipeline.wait_for_frames()
 
-    while counter < 1000:
+    while counter < 1000000:
         for frame in frames:
             if not frame.is_motion_frame():
                 continue
 
             motion_data = frame.as_motion_frame().get_motion_data()
-            motion_data = (motion_data.x / 100, motion_data.y / 100, motion_data.z / 100)
+            motion_data = (motion_data.x, motion_data.y, motion_data.z)
 
             if frame.profile.stream_type() == rs.stream.accel:
                 linear_acceleration.append(optical_to_ros(motion_data))

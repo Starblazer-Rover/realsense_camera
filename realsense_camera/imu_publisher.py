@@ -117,8 +117,6 @@ class ImuPublisher():
         """
         new_axis = [axis[2], -axis[0], -axis[1]]
 
-        new_axis = [axis[0], axis[1], axis[2]]
-
         return new_axis
     
     def __update_imu(self, accel_frame, gyro_frame):
@@ -135,8 +133,8 @@ class ImuPublisher():
 
         
 
-        linear_acceleration = [accel_data.x / 100, accel_data.y / 100, accel_data.z / 100]
-        angular_velocity = [gyro_data.x / 100, gyro_data.y / 100, gyro_data.z / 100]
+        linear_acceleration = [accel_data.x, accel_data.y, accel_data.z]
+        angular_velocity = [gyro_data.x, gyro_data.y, gyro_data.z]
 
         biased_linear_acceleration = self.__optical_to_ros(linear_acceleration)
         biased_angular_velocity = self.__optical_to_ros(angular_velocity)
@@ -149,7 +147,7 @@ class ImuPublisher():
     
     def __if_accel_zero(self):
         for i in range(3):
-            if self.linear_acceleration[i] > 0.001 or self.angular_velocity[i] > 0.001:
+            if self.linear_acceleration[i] > 0.0001 or self.angular_velocity[i] > 0.0001:
                 return False
             
         return True
