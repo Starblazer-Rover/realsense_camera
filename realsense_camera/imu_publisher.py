@@ -147,7 +147,7 @@ class ImuPublisher():
     
     def __if_accel_zero(self):
         for i in range(3):
-            if self.linear_acceleration[i] > 0.04 or self.angular_velocity[i] > 0.04:
+            if abs(self.linear_acceleration[i]) > 0.08 or abs(self.angular_velocity[i]) > 0.08:
                 return False
             
         return True
@@ -191,10 +191,10 @@ class ImuPublisher():
         msg.linear_acceleration = self.__create_vector3(self.linear_acceleration)
         #msg.orientation = self.quaternion
 
-        msg.orientation.x = 0
-        msg.orientation.y = 0
-        msg.orientation.z = 0
-        msg.orientation.w = 1
+        msg.orientation.x = 0.0
+        msg.orientation.y = 0.0
+        msg.orientation.z = 0.0
+        msg.orientation.w = 1.0
 
         msg.orientation_covariance = default_covariance
         msg.angular_velocity_covariance = default_covariance
