@@ -35,8 +35,9 @@ class RealsensePublisher(Node):
         self.image_counter = 0
         self.imu_counter = 0
         self.pointcloud_counter = 0
+        self.first_time = 0
 
-        timer_period = 0.0001
+        timer_period = 1/30
         self.timer = self.create_timer(timer_period, self.timer_callback)
 
     def timer_callback(self):
@@ -47,7 +48,22 @@ class RealsensePublisher(Node):
         gyro_frame = frames.first_or_default(rs.stream.gyro)
         depth_frame = frames.get_depth_frame()
 
+        image_msg = self.image.create_image(color_frame)
+        self.__image_publisher.publish(image_msg)
 
+        imu_msg = self.imu.create_imu(accel_frame, gyro_frame)
+        self.__imu_publisher.publish(imu_msg)
+
+        if self.first_time == 0:
+            self.first_time = imu_msg.header.stamp.sec + (imu_msg.header.stamp.nanosec / 1000000000)
+        else:
+            second_time = imu_msg.header.stamp.sec + (imu_msg.header.stamp.nanosec / 1000000000)
+            #self.get_logger().info(f'Time: {(second_time - self.first_time)}')
+            self.get_logger().info(f'{imu_msg.linear_acceleration.x}')
+            self.first_time = second_time
+
+
+        """
         if self.image_counter == 5:
             msg = self.image.create_image(color_frame)
             self.__image_publisher.publish(msg)
@@ -61,15 +77,12 @@ class RealsensePublisher(Node):
             self.get_logger().info(f'{msg.linear_acceleration.x}, {msg.linear_acceleration.y}, {msg.linear_acceleration.z}')
             #self.get_logger().info(f'{msg.angular_velocity.x}, {msg.angular_velocity.y}, {msg.angular_velocity.z}')
             self.imu_counter = 0
-
-            """
             if self.first_time == 0:
                 self.first_time = msg.header.stamp.sec + (msg.header.stamp.nanosec / 1000000000)
             else:
 
                 self.get_logger().info(f'{(msg.header.stamp.sec + (msg.header.stamp.nanosec / 1000000000)) - self.first_time}')
                 self.first_time = msg.header.stamp.sec + (msg.header.stamp.nanosec / 1000000000)
-            """
         else:
             self.imu_counter += 1
 
@@ -79,6 +92,7 @@ class RealsensePublisher(Node):
             self.pointcloud_counter = 0
         else:
             self.pointcloud_counter += 1
+        """
 
 
 def main(args=None):

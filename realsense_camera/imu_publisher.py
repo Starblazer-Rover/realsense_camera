@@ -147,7 +147,7 @@ class ImuPublisher():
     
     def __if_accel_zero(self):
         for i in range(3):
-            if abs(self.linear_acceleration[i]) > 0.08 or abs(self.angular_velocity[i]) > 0.08:
+            if abs(self.linear_acceleration[i]) > 0.0 or abs(self.angular_velocity[i]) > 0.0:
                 return False
             
         return True
