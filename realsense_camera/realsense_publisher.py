@@ -54,15 +54,6 @@ class RealsensePublisher(Node):
         imu_msg = self.imu.create_imu(accel_frame, gyro_frame)
         self.__imu_publisher.publish(imu_msg)
 
-        if self.first_time == 0:
-            self.first_time = imu_msg.header.stamp.sec + (imu_msg.header.stamp.nanosec / 1000000000)
-        else:
-            second_time = imu_msg.header.stamp.sec + (imu_msg.header.stamp.nanosec / 1000000000)
-            #self.get_logger().info(f'Time: {(second_time - self.first_time)}')
-            self.get_logger().info(f'{imu_msg.linear_acceleration.x}')
-            self.first_time = second_time
-
-
         """
         if self.image_counter == 5:
             msg = self.image.create_image(color_frame)

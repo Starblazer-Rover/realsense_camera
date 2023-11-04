@@ -3,7 +3,11 @@ from rclpy.node import Node
 
 import numpy as np
 from scipy.signal import butter, lfilter
+<<<<<<< HEAD
 import mathplotlib.pyplot as plt
+=======
+import matplotlib.pyplot as plt
+>>>>>>> 9a38ddbe5f084304570ac845eff74c83f37472b3
 
 from sensor_msgs.msg import Imu
 
@@ -11,6 +15,10 @@ class TestSubscriber(Node):
     def __init__(self):
         super().__init__('test_subscriber')
         self.acceleration_x = []
+<<<<<<< HEAD
+=======
+        self.new_acceleration_x = []
+>>>>>>> 9a38ddbe5f084304570ac845eff74c83f37472b3
         self.acceleration_y = []
         self.acceleration_z = []
         self.time_list = []
@@ -28,6 +36,7 @@ class TestSubscriber(Node):
         if self.counter == 0:
             self.timer = msg.header.stamp.sec + (msg.header.stamp.nanosec / 1000000000)
 
+<<<<<<< HEAD
         if self.counter < 90:
             self.acceleration_x.append(msg.linear_acceleration.x)
             self.acceleration_y.append(msg.linear_acceleration.y)
@@ -35,12 +44,22 @@ class TestSubscriber(Node):
             self.time_list.append(self.timer - msg.header.stamp.sec + (msg.header.stamp.nanosec / 1000000000))
 
         if self.counter == 90:
+=======
+        if self.counter < 30:
+            self.acceleration_x.append(msg.linear_acceleration.x)
+            self.acceleration_y.append(msg.linear_acceleration.y)
+            self.acceleration_z.append(msg.linear_acceleration.z)
+            self.time_list.append(self.timer - (msg.header.stamp.sec + (msg.header.stamp.nanosec / 1000000000)))
+
+        if self.counter == 30:
+>>>>>>> 9a38ddbe5f084304570ac845eff74c83f37472b3
 
             max_val = max(self.acceleration_x)
             min_val = min(self.acceleration_x)
 
             offset = (max_val + min_val) / 2
 
+<<<<<<< HEAD
             cutoff_frequency = 10
             filter_order = 2
 
@@ -50,6 +69,18 @@ class TestSubscriber(Node):
             b, a = self.butter_lowpass(cutoff_frequency, 30, filter_order)
             
             self.acceleration_x = lfilter(b, a, self.acceleration_x)
+=======
+            cutoff_frequency = 0.5
+            filter_order = 2
+
+            for i in range(len(self.acceleration_x)):
+                self.acceleration_x[i] -= offset
+
+            b, a = self.butter_lowpass(cutoff_frequency, 30, filter_order)
+            
+            self.new_acceleration_x = lfilter(b, a, self.acceleration_x)
+
+>>>>>>> 9a38ddbe5f084304570ac845eff74c83f37472b3
 
             """
             for i in range(len(self.acceleration_x)):
@@ -59,7 +90,12 @@ class TestSubscriber(Node):
             self.get_logger().info(f'{SNR}, {offset}')
             """
             plt.figure(figsize=(10, 6))
+<<<<<<< HEAD
             plt.plot(self.time_list, self.acceleration_x, label="data")
+=======
+            plt.plot(self.time_list, self.acceleration_x, label="raw")
+            plt.plot(self.time_list, self.new_acceleration_x, label="butter")
+>>>>>>> 9a38ddbe5f084304570ac845eff74c83f37472b3
             plt.xlabel('Time')
             plt.ylabel('Data')
             plt.title('ZACH')
