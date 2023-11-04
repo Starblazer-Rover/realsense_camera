@@ -21,7 +21,8 @@ setup(
     entry_points={
         'console_scripts': [
             'camera = realsense_camera.realsense_publisher:main',
-            'uncompress = realsense_camera.uncompress_image:main'
+            'uncompress = realsense_camera.uncompress_image:main',
+            'test = realsense_camera.test_publisher:main'
         ],
     },
 )
