@@ -29,13 +29,13 @@ class TestSubscriber(Node):
         if self.counter == 0:
             self.timer = msg.header.stamp.sec + (msg.header.stamp.nanosec / 1000000000)
 
-        if self.counter < 90:
+        if self.counter < 30:
             self.acceleration_x.append(msg.linear_acceleration.x)
             self.acceleration_y.append(msg.linear_acceleration.y)
             self.acceleration_z.append(msg.linear_acceleration.z)
             self.time_list.append(self.timer - (msg.header.stamp.sec + (msg.header.stamp.nanosec / 1000000000)))
 
-        if self.counter == 90:
+        if self.counter == 30:
 
             max_val = max(self.acceleration_x)
             min_val = min(self.acceleration_x)
