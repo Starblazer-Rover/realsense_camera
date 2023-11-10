@@ -22,6 +22,7 @@ setup(
         'console_scripts': [
             'camera = realsense_camera.realsense_publisher:main',
             'uncompress = realsense_camera.uncompress_image:main',
+            'calibration = realsense_camera.imu_calibration:main',
             'test = realsense_camera.test_publisher:main'
         ],
     },

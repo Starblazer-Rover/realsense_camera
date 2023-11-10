@@ -11,19 +11,18 @@ from sensor_msgs.msg import CompressedImage, Imu, PointCloud2
 class RealsensePublisher(Node):
     
     def __init__(self):
+        # Initializes Node and Publishers
         super().__init__('realsense_publisher')
         self.__image_publisher = self.create_publisher(CompressedImage, '/camera/CompressedImage', 1)
-        self.__imu_publisher = self.create_publisher(Imu, '/odom/Imu', 10)
+        self.__imu_publisher = self.create_publisher(Imu, '/odom/Imu', 15)
         self.__pointcloud_publisher = self.create_publisher(PointCloud2, '/camera/PointCloud2', 10)
 
+        # Creates objects of all data which will be published
         self.image = ImagePublisher()
         self.imu = ImuPublisher()
         self.pointcloud = PointCloudPublisher()
 
-        self.first_time_sec = 0
-        self.first_time_nanosec = 0
-        self.first_time = 0.0
-
+        # Initializes the camera for all the frames being analyzed
         self.pipeline = rs.pipeline()
         self.config = rs.config()
         self.config.enable_stream(rs.stream.accel)
@@ -32,13 +31,61 @@ class RealsensePublisher(Node):
         self.config.enable_stream(rs.stream.color, 640, 480, rs.format.rgb8, 30)
         self.pipeline.start(self.config)
 
-        self.image_counter = 0
+        # Values for the IMU publisher
         self.imu_counter = 0
-        self.pointcloud_counter = 0
-        self.first_time = 0
+        self.imu_input = []
+        self.imu_output = []
+        self.first_data_set = True
 
+        # Timer for the loop
         timer_period = 1/30
         self.timer = self.create_timer(timer_period, self.timer_callback)
+    
+    def publish_imu(self, state, msg):
+        """A switch function which does an initialization of the imu
+           or does a normal cycle
+
+           --init--
+           This creates a list of 15 IMU messages and processes them through a lowpass filter
+           It then sets it to the output list so it can start compiling messages as it is publishing
+
+           --cycle--
+           This is the normal cycle after it gets the first 15 IMU messages
+           It grabs the new imu data and publishes the old data which is delayed 0.5 seconds
+           Once the counter reaches 15, it will send the new data through the lowpass filter and change it to the old data
+
+           This will always give data with a 0.5 second delay. The messages keep their original timestamps, so it is still accurate
+           You just get the data a little later.
+
+        Args:
+            state (string): switch statement
+            msg (IMU msg): IMU Message
+        """
+
+        if state == "init":
+            if self.imu_counter < 15:
+                self.imu_input.append(msg)
+                self.imu_counter += 1
+            else:
+                self.first_data_set = False
+                self.imu_counter = 0
+                self.imu_output = self.imu.low_pass_filter(self.imu_input[:])
+                self.imu_input = []
+
+        elif state == "cycle":
+            if self.imu_counter < 15:
+                self.imu_input.append(msg)
+                imu_msg = self.imu_output[self.imu_counter]
+                self.__imu_publisher.publish(imu_msg)
+
+                #self.get_logger().info(f'Linear_X: {imu_msg.linear_acceleration.x}, Linear_Y: {imu_msg.linear_acceleration.y}, Linear_Z: {imu_msg.linear_acceleration.z}')
+                self.get_logger().info(f'Angular_X: {imu_msg.angular_velocity.x}, Angular Y: {imu_msg.angular_velocity.y}, Angular Z: {imu_msg.angular_velocity.z}')
+                self.imu_counter += 1
+            else:
+                self.imu_counter = 0
+                self.imu_output = self.imu.low_pass_filter(self.imu_input[:])
+                self.imu_input = []
+
 
     def timer_callback(self):
         frames = self.pipeline.wait_for_frames()
@@ -52,38 +99,12 @@ class RealsensePublisher(Node):
         self.__image_publisher.publish(image_msg)
 
         imu_msg = self.imu.create_imu(accel_frame, gyro_frame)
-        self.__imu_publisher.publish(imu_msg)
 
-        """
-        if self.image_counter == 5:
-            msg = self.image.create_image(color_frame)
-            self.__image_publisher.publish(msg)
-            self.image_counter = 0
+        
+        if self.first_data_set:
+            self.publish_imu("init", imu_msg)
         else:
-            self.image_counter += 1
-
-        if self.imu_counter == 0:
-            msg = self.imu.create_imu(accel_frame, gyro_frame)
-            self.__imu_publisher.publish(msg)
-            self.get_logger().info(f'{msg.linear_acceleration.x}, {msg.linear_acceleration.y}, {msg.linear_acceleration.z}')
-            #self.get_logger().info(f'{msg.angular_velocity.x}, {msg.angular_velocity.y}, {msg.angular_velocity.z}')
-            self.imu_counter = 0
-            if self.first_time == 0:
-                self.first_time = msg.header.stamp.sec + (msg.header.stamp.nanosec / 1000000000)
-            else:
-
-                self.get_logger().info(f'{(msg.header.stamp.sec + (msg.header.stamp.nanosec / 1000000000)) - self.first_time}')
-                self.first_time = msg.header.stamp.sec + (msg.header.stamp.nanosec / 1000000000)
-        else:
-            self.imu_counter += 1
-
-        if self.pointcloud_counter == 5:
-            #msg = self.pointcloud.create_pointcloud(depth_frame)
-            #self.__pointcloud_publisher.publish(msg)
-            self.pointcloud_counter = 0
-        else:
-            self.pointcloud_counter += 1
-        """
+            self.publish_imu("cycle", imu_msg)
 
 
 def main(args=None):

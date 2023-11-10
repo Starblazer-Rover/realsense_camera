@@ -1,6 +1,7 @@
 from madgwickahrs import MadgwickAHRS
 import pyrealsense2 as rs
 from rclpy.clock import Clock
+from scipy.signal import butter, lfilter
 
 from std_msgs.msg import Header
 from sensor_msgs.msg import Imu
@@ -22,9 +23,21 @@ class ImuPublisher():
 
                 linear_acceleration = data[0].split(" ")
                 angular_velocity = data[1].split(" ")
+                linear_acceleration_threshold = data[2].split(" ")
+                angular_velocity_threshold = data[3].split(" ")
 
                 self.linear_offset = [float(linear_acceleration[0]), float(linear_acceleration[1]), float(linear_acceleration[2])]
-                self.angular_offset = [float(angular_velocity[0]), float(angular_velocity[1]), float(angular_velocity[2])]  
+                self.angular_offset = [float(angular_velocity[0]), float(angular_velocity[1]), float(angular_velocity[2])] 
+
+                threshold = linear_acceleration_threshold + angular_velocity_threshold 
+
+                self.threshold = []
+
+                i = 0
+                while i < 12:
+                    self.threshold.append((float(threshold[i]), float(threshold[i + 1])))
+                    i += 2
+
         except FileNotFoundError:
             "File Not found"
         except Exception as e:
@@ -78,7 +91,7 @@ class ImuPublisher():
 
         return vector
     
-    def __update_quaternion(self):
+    def __update_quaternion(self, linear_acceleration, angular_velocity):
         """Creates a quaternion object which keeps track of the object's orientation
 
         Quaternion:
@@ -96,7 +109,7 @@ class ImuPublisher():
         quaternion = Quaternion()
 
         # Uses madgwick to calculate the quaternion
-        self.madgwick.update_imu(self.angular_velocity, self.linear_acceleration)
+        self.madgwick.update_imu(angular_velocity, linear_acceleration)
 
         quaternion.w = float(self.madgwick.quaternion[0])
         quaternion.x = float(self.madgwick.quaternion[1])
@@ -145,17 +158,117 @@ class ImuPublisher():
 
         return biased_linear_acceleration, biased_angular_velocity
     
-    def __if_accel_zero(self):
-        for i in range(3):
-            if abs(self.linear_acceleration[i]) > 0.0 or abs(self.angular_velocity[i]) > 0.0:
-                return False
-            
-        return True
+    def __butter_lowpass(self, cutoff, frequency, order):
+        """Generates info about the lowpass based on the arguments given
+
+        Args:
+            cutoff (float): cutoff frequency in Hz
+            frequency (float): Frequency of the sensor in Hz
+            order (int): Order of the filter. Keep it low for IMU
+
+        Returns:
+            arguments: Returns something that another function can use for the filter
+        """
+
+        # Lookup lowpass filters if you need more info on this
+        nyquist = 0.5 * frequency
+        normal_cutoff = cutoff / nyquist
+
+        return butter(order, normal_cutoff, btype='low', analog=False)
+        
     
-    def __isnt_moving(self):
-        for i in range(3):
-            self.linear_acceleration[i] = 0.0
-            self.angular_velocity[i] = 0.0
+    def __butter_offset(self, data):
+        """Establishes basic datapoints of the butter filter and executes them through the filter
+
+        Args:
+            data (list): List of the data being filtered
+
+        Returns:
+            list: Filtered data in the list
+        """
+
+        # Cutoff frequency: Set at 0.5Hz
+        CUTOFF = 0.5
+        # Order. Kept low because Odometry needs to keep accuracy
+        ORDER = 2
+
+        # Offset the data so the middle-point of the raw data is centered at 0
+        #data = self.offset(data)
+
+        # Grab the filter preset
+        b, a = self.__butter_lowpass(CUTOFF, 30, ORDER)
+
+        # Create filtered data using the preset and the list of raw data
+        return lfilter(b, a, data)
+        
+    def __establish_degrees(self, msg):
+        """Creates a list of all the data in the msg
+
+        Args:
+            msg (Imu Msg): Imu Msg
+
+        Returns:
+            Imu Msg: Imu Msg
+        """
+
+        return [msg.linear_acceleration.x, 
+                msg.linear_acceleration.y, 
+                msg.linear_acceleration.z, 
+                msg.angular_velocity.x, 
+                msg.angular_velocity.y, 
+                msg.angular_velocity.z
+                ]
+
+    def low_pass_filter(self, input_data):
+        """Grabs data of 15 messages and puts it through a lowpass filter to remove noise
+
+        Args:
+            input_data (list): List of IMU msgs
+
+        Returns:
+            list: List of filtered IMU msgs
+        """
+        
+        # Generate 6 empty lists inside the list
+        # Each sub-list represents a degree of freedom
+        # 0: Linear_acceleration_x
+        # 1: Linear_acceleration_y
+        # 2: Linear_acceleration_z
+        # 3: Angular_velocity_x
+        # 4: Angular_velocity_y
+        # 5: Angular_velocity_z
+        lists = [[] for _ in range(6)]
+        
+        # Data is grabbed and put in its respective list
+        for i in range(len(input_data)):
+
+            # Grab all the data and put it in a list
+            degrees = self.__establish_degrees(input_data[i])
+
+            # Take the data and put it in the respective section
+            for j in range(len(lists)):
+                lists[j].append(degrees[j])
+
+        # Now that the data is compiled, we can put it through the filter and change it
+        new_list = [self.__butter_offset(item) for item in lists]
+
+        # Since Python doesnt allow for pointers, this has to be coded like this
+        for i in range(len(input_data)):
+            input_data[i].linear_acceleration.x = new_list[0][i] if (new_list[0][i] > self.threshold[0][0] or new_list[0][i] < self.threshold[0][1]) else 0.0
+            input_data[i].linear_acceleration.y = new_list[1][i] if new_list[1][i] > self.threshold[1][0] or new_list[1][i] < self.threshold[1][1] else 0.0
+            input_data[i].linear_acceleration.z = new_list[2][i] if new_list[2][i] > self.threshold[2][0] or new_list[2][i] < self.threshold[2][1] else 0.0
+            input_data[i].angular_velocity.x = new_list[3][i] if new_list[3][i] > self.threshold[3][0] or new_list[3][i] < self.threshold[3][1] else 0.0
+            input_data[i].angular_velocity.y = new_list[4][i] if new_list[4][i] > self.threshold[4][0] or new_list[4][i] < self.threshold[4][1] else 0.0
+            input_data[i].angular_velocity.z = new_list[5][i] if new_list[5][i] > self.threshold[5][0] or new_list[5][i] < self.threshold[5][1] else 0.0
+
+            # Establish linear accel and angular velocity for quaternion calculation
+            linear_acceleration = (input_data[i].linear_acceleration.x, input_data[i].linear_acceleration.y, input_data[i].linear_acceleration.z)
+            angular_velocity = (input_data[i].angular_velocity.x, input_data[i].angular_velocity.y, input_data[i].angular_velocity.z)
+
+            # Calculate quaternion
+            input_data[i].orientation = self.__update_quaternion(linear_acceleration, angular_velocity)
+
+        return input_data
     
     def create_imu(self, accel_frame, gyro_frame):
         """Creates the IMU message which will be published
@@ -174,12 +287,7 @@ class ImuPublisher():
         """
 
         self.__read_calibration("/home/billee/billee_ws/src/realsense_camera/resource/imu_calibration.dat")
-        self.linear_acceleration, self.angular_velocity = self.__update_imu(accel_frame, gyro_frame)
-
-        if self.__if_accel_zero():
-            self.__isnt_moving()
-
-        self.quaternion = self.__update_quaternion()
+        linear_acceleration, angular_velocity = self.__update_imu(accel_frame, gyro_frame)
         
         default_covariance = [0.1, 0.0, 0.0, 
                               0.0, 0.1, 0.0, 
@@ -187,14 +295,8 @@ class ImuPublisher():
         
         msg = Imu()
         msg.header = self.__create_header("camera_link")
-        msg.angular_velocity = self.__create_vector3(self.angular_velocity)
-        msg.linear_acceleration = self.__create_vector3(self.linear_acceleration)
-        #msg.orientation = self.quaternion
-
-        msg.orientation.x = 0.0
-        msg.orientation.y = 0.0
-        msg.orientation.z = 0.0
-        msg.orientation.w = 1.0
+        msg.angular_velocity = self.__create_vector3(angular_velocity)
+        msg.linear_acceleration = self.__create_vector3(linear_acceleration)
 
         msg.orientation_covariance = default_covariance
         msg.angular_velocity_covariance = default_covariance

@@ -51,15 +51,7 @@ class TestSubscriber(Node):
             b, a = self.butter_lowpass(cutoff_frequency, 30, filter_order)
             
             self.new_acceleration_x = lfilter(b, a, self.acceleration_x)
-
-
-            """
-            for i in range(len(self.acceleration_x)):
-                self.acceleration_x[i] = self.acceleration_x[i]**2
-            noise_power = np.mean(self.acceleration_x)
-            SNR = -10 * np.log10(noise_power)
-            self.get_logger().info(f'{SNR}, {offset}')
-            """
+            
             plt.figure(figsize=(10, 6))
             plt.plot(self.time_list, self.acceleration_x, label="raw")
             plt.plot(self.time_list, self.new_acceleration_x, label="butter")
