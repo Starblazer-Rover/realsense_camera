@@ -1,72 +1,30 @@
 import rclpy
 from rclpy.node import Node
 
-import numpy as np
-from scipy.signal import butter, lfilter
-import matplotlib.pyplot as plt
-
-from sensor_msgs.msg import Imu
+from std_msgs.msg import String
 
 class TestSubscriber(Node):
     def __init__(self):
         super().__init__('test_subscriber')
-        self.acceleration_x = []
-        self.new_acceleration_x = []
-        self.acceleration_y = []
-        self.acceleration_z = []
-        self.time_list = []
-        self.counter = 0
-        self.timer = 0
-        self.subscription = self.create_subscription(Imu, '/odom/Imu', self.listener_callback, 10)
+        self.i = 0
 
-    def butter_lowpass(self, cutoff, fs, order=5):
-        nyquist = 0.5 * fs
-        normal_cutoff = cutoff / nyquist
-        b, a = butter(order, normal_cutoff, btype='low', analog=False)
-        return b, a
+        self.publisher = self.create_publisher(String, 'test_publisher', 10)
 
-    def listener_callback(self, msg):
-        if self.counter == 0:
-            self.timer = msg.header.stamp.sec + (msg.header.stamp.nanosec / 1000000000)
+        timer_period = 1/30
 
-        if self.counter < 30:
-            self.acceleration_x.append(msg.linear_acceleration.x)
-            self.acceleration_y.append(msg.linear_acceleration.y)
-            self.acceleration_z.append(msg.linear_acceleration.z)
-            self.time_list.append(self.timer - (msg.header.stamp.sec + (msg.header.stamp.nanosec / 1000000000)))
+        self.timer = self.create_timer(timer_period, self.listener_callback)
 
-        if self.counter == 30:
+    def listener_callback(self):
+        msg = String()
 
-            max_val = max(self.acceleration_x)
-            min_val = min(self.acceleration_x)
+        msg.data = f"{self.i}"
 
-            offset = (max_val + min_val) / 2
+        self.publisher.publish(msg)
 
-            cutoff_frequency = 0.5
-            filter_order = 2
+        self.i += 1
 
-            for i in range(len(self.acceleration_x)):
-                self.acceleration_x[i] -= offset
-
-            b, a = self.butter_lowpass(cutoff_frequency, 30, filter_order)
-            
-            self.new_acceleration_x = lfilter(b, a, self.acceleration_x)
-            
-            plt.figure(figsize=(10, 6))
-            plt.plot(self.time_list, self.acceleration_x, label="raw")
-            plt.plot(self.time_list, self.new_acceleration_x, label="butter")
-            plt.xlabel('Time')
-            plt.ylabel('Data')
-            plt.title('ZACH')
-            plt.legend()
-            plt.grid(True)
-
-            plt.show()
-            
-            self.counter += 1
-
-        else:
-            self.counter += 1
+        self.get_logger().info(f'{self.i}')
+        
 
 def main(args=None):
     rclpy.init(args=args)
@@ -78,3 +36,4 @@ def main(args=None):
     test_subscriber.destroy_node()
     rclpy.shutdown()
 
+main()

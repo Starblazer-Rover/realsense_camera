@@ -12,8 +12,8 @@ class ImuCalibrator(Node):
         # Camera initialization
         self.pipeline = rs.pipeline()
         config = rs.config()
-        config.enable_stream(rs.stream.accel)
-        config.enable_stream(rs.stream.gyro)
+        config.enable_stream(rs.stream.accel, rs.format.motion_xyz32f, 200)
+        config.enable_stream(rs.stream.gyro, rs.format.motion_xyz32f, 200)
         self.pipeline.start(config)
 
         # Imu value initialization
@@ -23,7 +23,7 @@ class ImuCalibrator(Node):
         self.thresholds = [[] for _ in range(6)]
 
         # Timer
-        timer_period = 1/30
+        timer_period = 1/200
         self.timer = self.create_timer(timer_period, self.timer_callback)
 
     def __optical_to_ros(self, accel_data, gyro_data):
