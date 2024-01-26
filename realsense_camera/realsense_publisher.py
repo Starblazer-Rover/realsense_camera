@@ -2,13 +2,13 @@ import rclpy
 from rclpy.node import Node
 import pyrealsense2 as rs
 from rclpy.clock import Clock
-from rclpy.qos import QoSProfile, DurabilityPolicy, HistoryPolicy, ReliabilityPolicy
 
 from image_publisher import ImagePublisher
 from imu_publisher import ImuPublisher
 from pointcloud_publisher import PointCloudPublisher
 
 from sensor_msgs.msg import CompressedImage, Imu, PointCloud2
+from rclpy.executors import MultiThreadedExecutor
 
 class RealsensePublisher(Node):
     
@@ -26,15 +26,6 @@ class RealsensePublisher(Node):
         self.pointcloud = PointCloudPublisher()
         timer = Clock().now().to_msg()
         self.start_time = timer.sec + (timer.nanosec / 1000000000)
-
-        # Initializes the camera for all the frames being analyzed
-        self.pipeline = rs.pipeline()
-        self.config = rs.config()
-        self.config.enable_stream(rs.stream.accel, rs.format.motion_xyz32f, 200)
-        self.config.enable_stream(rs.stream.gyro, rs.format.motion_xyz32f, 200)
-        #self.config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-        #self.config.enable_stream(rs.stream.color, 640, 480, rs.format.rgb8, 30)
-        self.pipeline.start(self.config)
 
         # Values for the IMU publisher
         self.imu_counter = 0
@@ -70,7 +61,7 @@ class RealsensePublisher(Node):
         """
 
         if state == "init":
-            if self.imu_counter < 15:
+            if self.imu_counter < 50:
                 self.imu_input.append(msg)
                 self.imu_counter += 1
             else:
@@ -82,7 +73,7 @@ class RealsensePublisher(Node):
                 self.publish_imu("cycle", msg)
 
         elif state == "cycle":
-            if self.imu_counter == 15:
+            if self.imu_counter == 50:
                 self.imu_counter = 0
                 self.imu_output = self.imu.low_pass_filter(self.imu_input[:])
                 self.imu_input = []
@@ -91,7 +82,7 @@ class RealsensePublisher(Node):
             imu_msg = self.imu_output[self.imu_counter]
             self.__imu_publisher.publish(imu_msg)
 
-            self.get_logger().info(f'Linear_X: {imu_msg.linear_acceleration.x}, Linear_Y: {imu_msg.linear_acceleration.y}, Linear_Z: {imu_msg.linear_acceleration.z}')
+            #self.get_logger().info(f'Linear_X: {imu_msg.linear_acceleration.x}, Linear_Y: {imu_msg.linear_acceleration.y}, Linear_Z: {imu_msg.linear_acceleration.z}')
             #self.get_logger().info(f'Angular_X: {imu_msg.angular_velocity.x}, Angular Y: {imu_msg.angular_velocity.y}, Angular Z: {imu_msg.angular_velocity.z}')
 
             self.imu_counter += 1
@@ -107,8 +98,10 @@ class RealsensePublisher(Node):
         if color_frame.is_video_frame():
             image_msg = self.image.create_image(color_frame)
             self.__image_publisher.publish(image_msg)
+            print("camera")
         
         if accel_frame.is_motion_frame() and gyro_frame.is_motion_frame():
+            self.get_logger().info("IMU")
             imu_msg = self.imu.create_imu(accel_frame, gyro_frame)
 
             if self.first_data_set:
@@ -116,17 +109,48 @@ class RealsensePublisher(Node):
             else:
                 self.publish_imu("cycle", imu_msg)
 
+def __initialize_camera():
+    # Initializes the camera for all the frames being analyzed
+        imu_pipeline = rs.pipeline()
+        imu_config = rs.config()
+        imu_config.enable_stream(rs.stream.accel, rs.format.motion_xyz32f, 200)
+        imu_config.enable_stream(rs.stream.gyro, rs.format.motion_xyz32f, 200)
+        imu_pipeline.start(imu_config)
+
+        camera_pipeline = rs.pipeline()
+        camera_config = rs.config()
+
+        camera_config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
+        camera_config.enable_stream(rs.stream.color, 640, 480, rs.format.rgb8, 30)
+
+        camera_pipeline.start(camera_config)
+        
+
+        return imu_pipeline, camera_pipeline
+
 
 def main(args=None):
     rclpy.init(args=args)
 
-    realsense_publisher = RealsensePublisher()
+    imu_pipeline, camera_pipeline = __initialize_camera()
 
-    rclpy.spin(realsense_publisher)
+    image_publisher = ImagePublisher(camera_pipeline)
+    imu_publisher = ImuPublisher(imu_pipeline)
 
-    realsense_publisher.destroy_node()
+    executor = MultiThreadedExecutor()
 
-    rclpy.shutdown()
+    executor.add_node(image_publisher)
+    executor.add_node(imu_publisher)
+
+    try:
+        # Use the executor to spin the node in multiple threads
+        executor.spin()
+    except KeyboardInterrupt:
+        pass
+
+    image_publisher.destroy_node()
+    imu_publisher.destroy_node()
+
 
 
 if __name__ == '__main__':

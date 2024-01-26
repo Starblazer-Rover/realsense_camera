@@ -1,5 +1,7 @@
 from madgwickahrs import MadgwickAHRS
 import pyrealsense2 as rs
+import rclpy
+from rclpy.node import Node
 from rclpy.clock import Clock
 from scipy.signal import butter, lfilter
 
@@ -10,9 +12,22 @@ from geometry_msgs.msg import Quaternion
 
 #! /usr/env/bin python
 
-class ImuPublisher():
+class ImuPublisher(Node):
     
-    def __init__(self):
+    def __init__(self, pipeline):
+        super().__init__('IMU_publisher')
+        self.__imu_publisher = self.create_publisher(Imu, '/odom/Imu', 50)
+        timer_period = 1/300
+
+        self.timer = self.create_timer(timer_period, self.timer_callback)
+
+        self.pipeline = pipeline
+
+        self.imu_counter = 0
+        self.imu_input = []
+        self.imu_output = []
+        self.first_data_set = True
+
         # Quaternion Initialization
         self.madgwick = MadgwickAHRS()
 
@@ -303,4 +318,96 @@ class ImuPublisher():
         msg.linear_acceleration_covariance = default_covariance
         
         return msg
+    
+    def publish_imu(self, state, msg):
+        """A switch function which does an initialization of the imu
+           or does a normal cycle
+
+           --init--
+           This creates a list of 15 IMU messages and processes them through a lowpass filter
+           It then sets it to the output list so it can start compiling messages as it is publishing
+
+           --cycle--
+           This is the normal cycle after it gets the first 15 IMU messages
+           It grabs the new imu data and publishes the old data which is delayed 0.5 seconds
+           Once the counter reaches 15, it will send the new data through the lowpass filter and change it to the old data
+
+           This will always give data with a 0.5 second delay. The messages keep their original timestamps, so it is still accurate
+           You just get the data a little later.
+
+        Args:
+            state (string): switch statement
+            msg (IMU msg): IMU Message
+        """
+
+        LOWPASS_OFFSET = 50
+
+        if state == "init":
+            if self.imu_counter < LOWPASS_OFFSET:
+                self.imu_input.append(msg)
+                self.imu_counter += 1
+            else:
+                self.first_data_set = False
+                self.imu_counter = 0
+                self.imu_output = self.low_pass_filter(self.imu_input[:])
+                self.imu_input = []
+
+                self.publish_imu("cycle", msg)
+
+        elif state == "cycle":
+            if self.imu_counter == LOWPASS_OFFSET:
+                self.imu_counter = 0
+                self.imu_output = self.low_pass_filter(self.imu_input[:])
+                self.imu_input = []
+
+            self.imu_input.append(msg)
+            imu_msg = self.imu_output[self.imu_counter]
+            self.__imu_publisher.publish(imu_msg)
+
+            self.get_logger().info(f'Linear_X: {imu_msg.linear_acceleration.x}, Linear_Y: {imu_msg.linear_acceleration.y}, Linear_Z: {imu_msg.linear_acceleration.z}')
+            #self.get_logger().info(f'Angular_X: {imu_msg.angular_velocity.x}, Angular Y: {imu_msg.angular_velocity.y}, Angular Z: {imu_msg.angular_velocity.z}')
+
+            self.imu_counter += 1
+    
+    def timer_callback(self):
+        frames = self.pipeline.wait_for_frames()
+
+        accel_frame = frames.first_or_default(rs.stream.accel)
+        gyro_frame = frames.first_or_default(rs.stream.gyro)
+
+        if accel_frame.is_motion_frame() and gyro_frame.is_motion_frame():
+
+            imu_msg = self.create_imu(accel_frame, gyro_frame)
+
+            if self.first_data_set:
+                self.publish_imu("init", imu_msg)
+            else:
+                self.publish_imu("cycle", imu_msg)
+
+
+def __initialize_camera():
+    # Initializes the camera for all the frames being analyzed
+        imu_pipeline = rs.pipeline()
+        imu_config = rs.config()
+        imu_config.enable_stream(rs.stream.accel, rs.format.motion_xyz32f, 200)
+        imu_config.enable_stream(rs.stream.gyro, rs.format.motion_xyz32f, 200)
+        imu_pipeline.start(imu_config)
+
+        return imu_pipeline
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    imu_pipeline = __initialize_camera()
+
+    imu_publisher = ImuPublisher(imu_pipeline)
+
+    try:
+        rclpy.spin(imu_publisher)
+    except:
+        imu_publisher.destroy_node()
+        imu_pipeline.stop()
+
+if __name__ == '__main__':
+    main()
 

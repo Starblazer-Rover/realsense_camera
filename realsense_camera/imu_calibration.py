@@ -1,6 +1,7 @@
 import pyrealsense2 as rs
 import rclpy
 import sys
+from rclpy.clock import Clock
 from rclpy.node import Node
 from scipy.signal import butter, lfilter
 
@@ -21,6 +22,9 @@ class ImuCalibrator(Node):
         self.data = [[] for _ in range(6)]
         self.offsets = [[] for _ in range(6)]
         self.thresholds = [[] for _ in range(6)]
+
+        timer = Clock().now().to_msg()
+        self.start_time = timer.sec + (timer.nanosec / 1000000000)
 
         # Timer
         timer_period = 1/200
@@ -113,6 +117,11 @@ class ImuCalibrator(Node):
 
     def timer_callback(self):
 
+        timer = Clock().now().to_msg()
+        end_time = timer.sec + (timer.nanosec / 1000000000)
+
+        time = end_time - self.start_time
+
         frames = self.pipeline.wait_for_frames()
 
         accel_frame = frames.first_or_default(rs.stream.accel)
@@ -123,35 +132,39 @@ class ImuCalibrator(Node):
 
         data = self.__optical_to_ros(accel_data, gyro_data)
 
-        for i in range(6):
-            self.data[i].append(data[i])
-
-
-        if self.counter == 10000:
+        if int(time) < 60:
+            #print(time)
+            print(f'Warmup: {round(time / 0.6, 2)}%', end='\r')
+        else:
             for i in range(6):
-                self.offsets[i] = self.__offset(self.data[i])
+                self.data[i].append(data[i])
 
-                for j in range(len(self.data[i])):
-                    self.data[i][j] -= self.offsets[i]
 
-                self.data[i] = self.__butter_offset(self.data[i])
+            if self.counter == 10000:
+                for i in range(6):
+                    self.offsets[i] = self.__offset(self.data[i])
 
-                if max(self.data[i]) >= 0:
-                    maximum = max(self.data[i]) * 1.1
-                else:
-                    maximum = max(self.data[i]) * 0.9
+                    for j in range(len(self.data[i])):
+                        self.data[i][j] -= self.offsets[i]
 
-                if min(self.data[i]) <= 0:
-                    minimum = min(self.data[i]) * 1.1
-                else:
-                    minimum = min(self.data[i]) * 0.9
+                    self.data[i] = self.__butter_offset(self.data[i])
 
-                self.thresholds[i] = (maximum, minimum)
+                    if max(self.data[i]) >= 0:
+                        maximum = max(self.data[i]) * 10
+                    else:
+                        maximum = 0.001
 
-            self.__print_calibration("/home/billee/billee_ws/src/realsense_camera/resource/imu_calibration.dat")
+                    if min(self.data[i]) <= 0:
+                        minimum = min(self.data[i]) * 10
+                    else:
+                        minimum = -0.001
 
-        print(f"{self.counter / 100}%", end="\r")
-        self.counter += 1
+                    self.thresholds[i] = (maximum, minimum)
+
+                self.__print_calibration("/home/billee/billee_ws/src/realsense_camera/resource/imu_calibration.dat")
+
+            print(f"Calibrating: {round(self.counter / 100, 4)}%", end="\r")
+            self.counter += 1
 
 
 def main(args=None):
