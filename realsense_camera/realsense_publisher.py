@@ -3,6 +3,7 @@ import pyrealsense2 as rs
 
 from image_publisher import ImagePublisher
 from imu_publisher import ImuPublisher
+from pointcloud_publisher import PointCloudPublisher
 
 from rclpy.executors import MultiThreadedExecutor
 
@@ -34,11 +35,13 @@ def main(args=None):
 
     image_publisher = ImagePublisher(camera_pipeline)
     imu_publisher = ImuPublisher(imu_pipeline)
+    depth_publisher = PointCloudPublisher(camera_pipeline)
 
     executor = MultiThreadedExecutor()
 
     executor.add_node(image_publisher)
     executor.add_node(imu_publisher)
+    executor.add_node(depth_publisher)
 
     try:
         # Use the executor to spin the node in multiple threads

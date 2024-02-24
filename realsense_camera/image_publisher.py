@@ -16,7 +16,7 @@ class ImagePublisher(Node):
 
         self.__image_publisher = self.create_publisher(CompressedImage, '/camera/CompressedImage', 1)
 
-        timer_period = 1/500
+        timer_period = 1/15
 
         self.timer = self.create_timer(timer_period, self.timer_callback)
 

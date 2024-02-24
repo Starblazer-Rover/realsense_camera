@@ -23,6 +23,8 @@ class ImuPublisher(Node):
 
         self.pipeline = pipeline
 
+        self.__read_calibration("/home/billee/billee_ws/src/realsense_camera/resource/imu_calibration.dat")
+
         self.imu_counter = 0
         self.imu_input = []
         self.imu_output = []
@@ -301,7 +303,6 @@ class ImuPublisher(Node):
             Imu: Holds all the IMU data listed above
         """
 
-        self.__read_calibration("/home/billee/billee_ws/src/realsense_camera/resource/imu_calibration.dat")
         linear_acceleration, angular_velocity = self.__update_imu(accel_frame, gyro_frame)
         
         default_covariance = [0.1, 0.0, 0.0, 
@@ -364,7 +365,7 @@ class ImuPublisher(Node):
             imu_msg = self.imu_output[self.imu_counter]
             self.__imu_publisher.publish(imu_msg)
 
-            self.get_logger().info(f'Linear_X: {imu_msg.linear_acceleration.x}, Linear_Y: {imu_msg.linear_acceleration.y}, Linear_Z: {imu_msg.linear_acceleration.z}')
+            #self.get_logger().info(f'Linear_X: {imu_msg.linear_acceleration.x}, Linear_Y: {imu_msg.linear_acceleration.y}, Linear_Z: {imu_msg.linear_acceleration.z}')
             #self.get_logger().info(f'Angular_X: {imu_msg.angular_velocity.x}, Angular Y: {imu_msg.angular_velocity.y}, Angular Z: {imu_msg.angular_velocity.z}')
 
             self.imu_counter += 1
