@@ -24,6 +24,7 @@ setup(
             'uncompress = realsense_camera.uncompress_image:main',
             'calibration = realsense_camera.imu_calibration:main',
             'depth = realsense_camera.pointcloud_publisher:main',
+            'server = realsense_camera.image_server:main',
             'test = realsense_camera.test_publisher:main'
         ],
     },

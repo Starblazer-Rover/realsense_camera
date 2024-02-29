@@ -66,13 +66,15 @@ class PointCloudPublisher(Node):
         #points are being manipulated physically to offset the rover object with the point cloud
         #points [:,:,1 and :,:,2 respectively refer to x and y]
         #the offset is taking the rover width and substracting the pixel size and position to center the rover inside the pointcloud
-        points[:,:,1] -= width//2
-        points[:,:,2] -= height//2
-
+        
+       
+        points[:,:,1] -= (width)//2
+        points[:,:,2] -= (height)//2 
+    
         return points
     
     def create_pointcloud(self, depth_frame):
-        header = self.__create_header('camera_link')
+        header = self.__create_header('base_link')
 
         """
         Use this format if you want to add anything else like rgb, make sure to change the create cloud to the correct one
