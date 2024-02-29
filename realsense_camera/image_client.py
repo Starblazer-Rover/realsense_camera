@@ -1,49 +1,48 @@
-import cv2
 import socket
 import numpy as np
 
-BUFF_SIZE = 65536
-client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, BUFF_SIZE)
-host_ip = 'localhost'  # Change this to the server's IP
-port = 8080
-message = b'Hello'
+def main():
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Use SOCK_DGRAM for UDP
+    host_ip = 'localhost'  # Change this to the server's IP
+    port = 8080
+    server_address = (host_ip, port)
 
-client_socket.sendto(message, (host_ip, port))
+    try:
+        client_socket.connect(server_address)
+        print("Connected to the server")
+    except socket.error as e:
+        print(f"Error connecting to the server: {e}")
+        return
 
-# Initialize variables to store received image parts
-left_half = None
-right_half = None
+    left_half = None
+    right_half = None
 
-while True:
-    # Receive left half of the image
-    left_data, _ = client_socket.recvfrom(BUFF_SIZE)
-    # Receive right half of the image
-    right_data, _ = client_socket.recvfrom(BUFF_SIZE)
+    while True:
+        # Receive the image data
+        print('booooo')
 
-    # Convert received bytes to numpy arrays
-    left_npdata = np.frombuffer(left_data, dtype=np.uint8)
-    right_npdata = np.frombuffer(right_data, dtype=np.uint8)
+        message, _ = client_socket.recvfrom(4096)
 
-    # Decode the image parts
-    left_frame = cv2.imdecode(left_npdata, 1)
-    right_frame = cv2.imdecode(right_npdata, 1)
+        print("yeeeer")
+        image_data = np.frombuffer(message, dtype=np.int32)
 
-    # Check if both parts are received
-    if left_frame is not None and right_frame is not None:
-        # Concatenate left and right halves to reconstruct the full image
-        full_frame = np.concatenate((left_frame, right_frame), axis=1)
+        # Split the image data into left and right halves
+        if left_half is None:
+            left_half = image_data
+        else:
+            right_half = image_data
 
-        # Display the reconstructed full image
-        cv2.imshow("RECEIVING VIDEO", full_frame)
+            # Combine the left and right halves
+            full_image = np.concatenate((left_half, right_half))
 
-        # Exit on 'q' key press
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord('q'):
-            break
-    else:
-        print("Received incomplete image parts. Retrying...")
+            # Print the entire image data
+            np.set_printoptions(threshold=np.inf)  # Print the entire array without truncation
+            print("Received full image:")
+            print(full_image)
 
-# Close the socket and destroy any OpenCV windows
-client_socket.close()
-cv2.destroyAllWindows()
+            # Reset the halves for the next image
+            left_half = None
+            right_half = None
+
+if __name__ == '__main__':
+    main()

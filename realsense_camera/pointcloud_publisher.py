@@ -57,6 +57,10 @@ class PointCloudPublisher(Node):
         
         depths = np.array(depth_frame.get_data())
 
+        depths = depths / 100
+
+        depths[depths == 0] = None
+
         y_coords, x_coords = np.indices((height, width))
 
         y_coords = y_coords[::-1]
@@ -68,8 +72,8 @@ class PointCloudPublisher(Node):
         #the offset is taking the rover width and substracting the pixel size and position to center the rover inside the pointcloud
         
        
-        points[:,:,1] -= (width)//2
-        points[:,:,2] -= (height)//2 
+        points[:,:,1] = (points[:,:,1] - (width//2)) / 100
+        points[:,:,2] = (points[:,:,2] - (height//2)) / 100
     
         return points
     
