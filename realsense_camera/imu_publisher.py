@@ -1,4 +1,3 @@
-from madgwickahrs import MadgwickAHRS
 import pyrealsense2 as rs
 import rclpy
 from rclpy.node import Node
@@ -31,7 +30,6 @@ class ImuPublisher(Node):
         self.first_data_set = True
 
         # Quaternion Initialization
-        self.madgwick = MadgwickAHRS()
 
     def __read_calibration(self, file_path):
         try:

@@ -40,8 +40,8 @@ def main(args=None):
     executor = MultiThreadedExecutor()
 
     executor.add_node(image_publisher)
-    executor.add_node(imu_publisher)
-    executor.add_node(depth_publisher)
+    #executor.add_node(imu_publisher)
+    #executor.add_node(depth_publisher)
 
     try:
         # Use the executor to spin the node in multiple threads
