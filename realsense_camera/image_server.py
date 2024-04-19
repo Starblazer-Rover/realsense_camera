@@ -34,7 +34,7 @@ def main():
 
 	server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-	server_address = ('169.254.167.120', 12346)
+	server_address = ('192.168.1.11', 12345)
 
 	print("Starting UDP Server")
 
