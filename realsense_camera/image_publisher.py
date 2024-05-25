@@ -7,26 +7,21 @@ from rclpy.node import Node
 
 import pyrealsense2 as rs
 
-from sensor_msgs.msg import CompressedImage
+from sensor_msgs.msg import Image
 from std_msgs.msg import Header
 
 class ImagePublisher(Node):
     def __init__(self, pipeline):
-        super().__init__('image_publisher')
+        super().__init__('image_publisher_raw')
 
-        self.__image_publisher = self.create_publisher(CompressedImage, '/camera/CompressedImage', 1)
+        self.__image_publisher = self.create_publisher(Image, '/camera/Image_raw', 1)
 
-        timer_period = 1/15
+        timer_period = 1/30
 
         self.timer = self.create_timer(timer_period, self.timer_callback)
 
-        timer = Clock().now().to_msg()
-        self.start_time = timer.sec + (timer.nanosec / 1000000000)
-
         self.bridge = CvBridge()
         self.pipeline = pipeline
-        
-        self.counter = 0
         
     def create_header(self, frame_id):
         """Creates a header object for the message
@@ -55,7 +50,7 @@ class ImagePublisher(Node):
 
         image_data = np.asarray(color_frame.get_data())
 
-        msg = self.bridge.cv2_to_compressed_imgmsg(image_data, 'jpg')
+        msg = self.bridge.cv2_to_imgmsg(image_data)
         msg.header = self.create_header('camera_link')
 
         return msg
@@ -65,16 +60,6 @@ class ImagePublisher(Node):
 
         color_frame = frames.get_color_frame()
 
-        timer = Clock().now().to_msg()
-
-        time = timer.sec + (timer.nanosec / 1000000000)
-
-        time = time - self.start_time
-
         if color_frame.is_video_frame():
             image_msg = self.create_image(color_frame)
             self.__image_publisher.publish(image_msg)
-
-            self.counter += 1
-
-            #self.get_logger().info(f'{self.counter / time}')

@@ -1,28 +1,27 @@
-from rclpy.clock import Clock
-import rclpy
-import pyrealsense2 as rs
-from rclpy.node import Node
 import numpy as np
+import time
+import sys
 
+import rclpy
+from rclpy.node import Node
+from rclpy.clock import Clock
 from sensor_msgs.msg import PointCloud2
-
 from sensor_msgs_py import point_cloud2 as pc2
 from std_msgs.msg import Header
+import pyrealsense2 as rs
 
 class PointCloudPublisher(Node):
 
     def __init__(self, pipeline):
-        self.pipeline = pipeline
         super().__init__('pointcloud_publisher')
-        self.__pointcloud_publisher = self.create_publisher(PointCloud2, '/map/PointCloud2', 10)
-        timer_period = 1/90
+
+        self.pipeline = pipeline
+        self.pointcloud_publisher = self.create_publisher(PointCloud2, '/depth/PointCloud2_raw', 1)
+
+        timer_period = 1/30
         self.timer = self.create_timer(timer_period, self.timer_callback)
-
-        timer = Clock().now().to_msg()
-        self.start_time = timer.sec + (timer.nanosec / 1000000000)
-        self.counter = 0
-
-    def __create_header(self, frame_id):
+    
+    def create_header(self, frame_id):
         """Creates a header object for the message
 
         Header:
@@ -44,111 +43,91 @@ class PointCloudPublisher(Node):
         header.frame_id = frame_id
 
         return header
-    
-    def __update_depth(self, depth_frame):
+            
+    def update_depth(self, data, f_mm):
         """Grabs the depth of all the points in the frame
 
         Returns:
             List: List containing x, y, z coordinates of each point
         """
 
-        height = depth_frame.get_height()
-        width = depth_frame.get_width()
-        
-        depths = np.array(depth_frame.get_data())
+        data = np.array(data).reshape((480, 640))
 
-        depths = depths / 100
 
-        depths[depths == 0] = None
+        aspect_ratio = (4, 3)
+        aspect_factor = np.sqrt(aspect_ratio[0]**2 + aspect_ratio[1]**2)
+
+        height, width = data.shape
+
+        sensor_diagonal_rad = np.deg2rad(100.6)
+        sensor_diagonal_mm = 2 * f_mm * np.tan(sensor_diagonal_rad / 2)
+
+        sensor_width_mm = sensor_diagonal_mm * (aspect_ratio[0] / aspect_factor)
+        sensor_height_mm = sensor_diagonal_mm * (aspect_ratio[1] / aspect_factor)
+
+        f_pixels = f_mm * (width / sensor_width_mm)
+
+        data = data.astype(float)
+
+        data *= 0.0394
+
+        data[data == 0] = np.nan
 
         y_coords, x_coords = np.indices((height, width))
 
-        y_coords = y_coords[::-1]
+        cx = width / 2
+        cy = height / 2
 
-        points = np.dstack((depths, x_coords, y_coords))
-#--------------------------------------------------------------------
-        #points are being manipulated physically to offset the rover object with the point cloud
-        #points [:,:,1 and :,:,2 respectively refer to x and y]
-        #the offset is taking the rover width and substracting the pixel size and position to center the rover inside the pointcloud
-        
-       
-        points[:,:,1] = (points[:,:,1] - (width//2)) / 100
-        points[:,:,2] = (points[:,:,2] - (height//2)) / 100
+        x_coords = (width - 1- x_coords - cx) * data / f_pixels
+        y_coords = (height - 1 - y_coords - cy) * data / f_pixels
+
+        points = np.dstack((data, x_coords, y_coords))
     
         return points
-    
-    def create_pointcloud(self, depth_frame):
-        header = self.__create_header('base_link')
 
-        """
-        Use this format if you want to add anything else like rgb, make sure to change the create cloud to the correct one
-
-        fields = [PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1),
-                  PointField(name="y", offset=4, datatype=PointField.FLOAT32, count=1),
-                  PointField(name="z", offset=8, datatype=PointField.FLOAT32, count=1)]
-        """
-
-        points = self.__update_depth(depth_frame)
-
-        msg = pc2.create_cloud_xyz32(header, points)
-
-        return msg
-    
     def timer_callback(self):
         frames = self.pipeline.wait_for_frames()
 
-        depth_frame = frames.get_depth_frame()
+        data = frames.get_depth_frame().get_data()
+        
+        points = self.update_depth(data, 1.93)
 
-        timer = Clock().now().to_msg()
+        header = self.create_header('camera_link')
 
-        time = timer.sec + (timer.nanosec / 1000000000)
+        msg = pc2.create_cloud_xyz32(header, points)
 
-        time = time - self.start_time
+        print('working')
 
-        if depth_frame.is_depth_frame():
-            pointcloud_msg = self.create_pointcloud(depth_frame)
-            self.__pointcloud_publisher.publish(pointcloud_msg)
-
-            self.counter += 1
-
-            self.get_logger().info(f'{self.counter / time}')
+        self.pointcloud_publisher.publish(msg)
 
 
 def __initialize_camera():
     # Initializes the camera for all the frames being analyzed
-        imu_pipeline = rs.pipeline()
-        imu_config = rs.config()
-        imu_config.enable_stream(rs.stream.accel, rs.format.motion_xyz32f, 200)
-        imu_config.enable_stream(rs.stream.gyro, rs.format.motion_xyz32f, 200)
-        imu_pipeline.start(imu_config)
-
         camera_pipeline = rs.pipeline()
         camera_config = rs.config()
 
-        camera_config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 90)
+        camera_config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
         camera_config.enable_stream(rs.stream.color, 640, 480, rs.format.rgb8, 30)
 
         camera_pipeline.start(camera_config)
-        
 
-        return imu_pipeline, camera_pipeline
+        return camera_pipeline
 
 
 def main(args=None):
     rclpy.init(args=args)
 
-    imu_pipeline, camera_pipeline = __initialize_camera()
+    pipeline = __initialize_camera()
 
-    pointcloud_publisher = PointCloudPublisher(camera_pipeline)
+    pointcloud_publisher = PointCloudPublisher(pipeline)
 
-    rclpy.spin(pointcloud_publisher)
-
-    pointcloud_publisher.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(pointcloud_publisher)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        pointcloud_publisher.destroy_node()
 
 
 if __name__ == '__main__':
     main()
-
-
-

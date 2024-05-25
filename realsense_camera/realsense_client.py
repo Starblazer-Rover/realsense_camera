@@ -94,17 +94,9 @@ class ImagePublisher(Node):
             compressed_image.data = image_data.tolist()
             compressed_image.format = 'jpg'
 
-            cv_image = self.bridge.compressed_imgmsg_to_cv2(compressed_image, desired_encoding='rgb8')
+            cv_image = self.bridge.compressed_imgmsg_to_cv2(compressed_image, desired_encoding='bgr8')
 
-            cv_image = self.bridge.cv2_to_imgmsg(cv_image, 'bgr8')
-
-            cv_image.header = self.create_header('camera_link')
-
-            timee = Clock().now()
-            self.counter += 1
-
-            print(self.counter / ((timee.nanoseconds - self.timee.nanoseconds) / 1000000000))
-
+            cv_image = self.bridge.cv2_to_imgmsg(cv_image, 'rgb8')
             self.publisher.publish(cv_image)
 
         except TimeoutError:
