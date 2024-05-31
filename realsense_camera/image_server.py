@@ -7,6 +7,13 @@ import time
 
 def initialize_camera():
 	# Initializes the camera for all the frames being analyzed
+ 
+	ctx = rs.context()
+	devices = ctx.query_devices()
+	for dev in devices:
+		print("resetting")
+		dev.hardware_reset()
+
 	imu_pipeline = rs.pipeline()
 	imu_config = rs.config()
 	imu_config.enable_stream(rs.stream.accel, rs.format.motion_xyz32f, 200)

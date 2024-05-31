@@ -5,17 +5,26 @@ import time
 import sys
 
 import rclpy
+from rclpy.clock import Clock
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from sensor_msgs.msg import CompressedImage
+from std_msgs.msg import Header
 from cv_bridge import CvBridge, CvBridgeError
 
 
 class ImagePublisher(Node):
 
-    def __init__(self, topic, port):
+    def __init__(self):
         super().__init__('image_publisher')
-        self.publisher = self.create_publisher(Image, topic, 1)
+
+        self.declare_parameter('topic', '/camera2')
+        self.declare_parameter('port', 12346)
+
+        topic = self.get_parameter('topic').value
+        port = self.get_parameter('port').value
+
+        self.publisher = self.create_publisher(Image, topic, 10)
 
         self.bridge = CvBridge()
         signal.signal(signal.SIGALRM, self.timeout_handler)
@@ -25,8 +34,34 @@ class ImagePublisher(Node):
         self.server_address = ('192.168.1.11', port)
         print("connected")
 
-        timer_period = 1/60
+        self.timee = Clock().now()
+        self.counter = 0
+
+        timer_period = 1/30
         self.timer = self.create_timer(timer_period, self.timer_callback)
+
+    def create_header(self, frame_id):
+        """Creates a header object for the message
+
+        Header:
+            stamp: Time message which has the seconds and nanoseconds since the epoch
+            frame_id: TF which the header is relevant to
+
+        Args:
+            frame_id (String): This is the transform which the message applies to
+
+        Returns:
+            Header: Header containing the timestamp and given frame_id
+        """
+
+        # Creates a timer for timestamps
+        timer = Clock().now()
+        header = Header()
+
+        header.stamp = timer.to_msg()
+        header.frame_id = frame_id
+
+        return header
 
     def timeout_handler(self, signum, frame):
        raise TimeoutError()
@@ -61,9 +96,16 @@ class ImagePublisher(Node):
 
             cv_image = self.bridge.compressed_imgmsg_to_cv2(compressed_image, desired_encoding='rgb8')
 
-            cv_image = self.bridge.cv2_to_imgmsg(cv_image, 'bgr8')
+            cv_image = self.bridge.cv2_to_imgmsg(cv_image, 'rgb8')
+
+            cv_image.header = self.create_header('camera_link')
+
+            timee = Clock().now()
+            self.counter += 1
+
+            print(self.counter / ((timee.nanoseconds - self.timee.nanoseconds) / 1000000000))
+
             self.publisher.publish(cv_image)
-            print("Received")
 
         except TimeoutError:
             print("Timeout")
@@ -72,12 +114,17 @@ class ImagePublisher(Node):
 
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             signal.alarm(0)
+            self.timee = Clock().now()
+            self.counter = 0
             return
         except (CvBridgeError, TypeError):
             print("Failed")
             self.client_socket.close()
 
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+            self.timee = Clock().now()
+            self.counter = 0
             try:
                 time.sleep(1)
             except TimeoutError:
@@ -88,16 +135,7 @@ class ImagePublisher(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    topic = sys.argv[1]
-    port = int(sys.argv[2])
-
-    try:
-        assert topic != None and port != None
-    except AssertionError:
-        print("Format: python3 test_client.py <topic> <port>")
-        sys.exit()
-
-    image_publisher = ImagePublisher(topic, port)
+    image_publisher = ImagePublisher()
 
     try:
         rclpy.spin(image_publisher)
