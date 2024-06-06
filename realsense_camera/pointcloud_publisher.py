@@ -124,7 +124,7 @@ def main(args=None):
     try:
         rclpy.spin(pointcloud_publisher)
     except KeyboardInterrupt:
-        pass
+        pipeline.stop()
     finally:
         pointcloud_publisher.destroy_node()
 

@@ -9,129 +9,105 @@ import time
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Int64
-
+from sensor_msgs.msg import Image
 
 class ArucoPublisher(Node):
-	def __init__(self):
-		super().__init__('aruco_publisher')
-		self.publisher = self.create_publisher(Int64, '/movement/aruco', 10)
+    def __init__(self):
+        super().__init__('aruco_publisher')
+        self.publisher = self.create_publisher(Int64, '/movement/aruco', 10)
 
-		timer_period = 1/30
+        self.subscriber = self.create_subscription(Image, '/camera/Image_raw', self.timer_callback, 1)
 
-		signal.signal(signal.SIGALRM, self.timeout_handler)
+        signal.signal(signal.SIGALRM, self.timeout_handler)
 
-		self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-		self.server_address = ('169.254.167.120', 12345)
+        self.server_address = ('192.168.1.60', 12345)
 
-		print("Starting UDP Server")
+        print("Starting UDP Server")
 
-		self.server_socket.bind(self.server_address)
+        self.server_socket.bind(self.server_address)
 
-		self.bridge = CvBridge()
+        self.bridge = CvBridge()
+    
+    def detect_aruco_corners(self, image_data):
+        image = cv2.cvtColor(image_data, cv2.COLOR_RGB2BGR)
 
-		_, self.camera_pipeline = self.initialize_camera()
+        aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+        parameters = cv2.aruco.DetectorParameters()
 
-		self.timer = self.create_timer(timer_period, self.timer_callback)
+        corners, ids, _ = cv2.aruco.detectMarkers(image, aruco_dict, parameters=parameters)
 
-	def initialize_camera(self):
-		# Initializes the camera for all the frames being analyzed
-		imu_pipeline = rs.pipeline()
-		imu_config = rs.config()
-		imu_config.enable_stream(rs.stream.accel, rs.format.motion_xyz32f, 200)
-		imu_config.enable_stream(rs.stream.gyro, rs.format.motion_xyz32f, 200)
-		imu_pipeline.start(imu_config)
+        if ids is not None:
+            for i in range(len(ids)):
+                cv2.aruco.drawDetectedMarkers(image, corners)
 
-		camera_pipeline = rs.pipeline()
-		camera_config = rs.config()
+                center = np.mean(corners[i][0], axis=0).astype(int)
+                print(center)
+                cv2.circle(image, tuple(center), 5, (0, 255, 0), -1)
+        else:
+            center = [1000, 0]
+            print("None")
 
-		camera_config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-		camera_config.enable_stream(rs.stream.color, 640, 480, rs.format.rgb8, 30)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-		camera_pipeline.start(camera_config)
+        return image, center
+    
 
-		return imu_pipeline, camera_pipeline
-	
-	def detect_aruco_corners(self, image_data):
-		image = cv2.cvtColor(image_data, cv2.COLOR_RGB2BGR)
+    def timeout_handler(self, signum, frame):
+        raise TimeoutError()
 
-		aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_1000)
-		parameters = cv2.aruco.DetectorParameters_create()
+    def timer_callback(self, msg):
+        int_msg = Int64()
 
-		corners, ids, _ = cv2.aruco.detectMarkers(image, aruco_dict, parameters=parameters)
+        signal.alarm(1)
 
-		if ids is not None:
-			for i in range(len(ids)):
-				cv2.aruco.drawDetectedMarkers(image, corners)
+        data = self.bridge.imgmsg_to_cv2(msg)
 
-				center = np.mean(corners[i][0], axis=0).astype(int)
-				print(center)
-				cv2.circle(image, tuple(center), 5, (0, 255, 0), -1)
-		else:
-			center = [1000, 0]
-			print("None")
+        image_data = np.asarray(data, dtype=np.uint8)
 
-		image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        result_image, center = self.detect_aruco_corners(image_data)
 
-		return image, center
-	
+        int_msg.data = int(center[0])
 
-	def timeout_handler(self, signum, frame):
-		raise TimeoutError()
+        self.publisher.publish(int_msg)
 
-	def timer_callback(self):
-		msg = Int64()
+        compressed_data = self.bridge.cv2_to_compressed_imgmsg(result_image, 'jpg').data
 
-		signal.alarm(1)
+        image_data = np.asarray(compressed_data, dtype=np.uint8)
 
-		frames = self.camera_pipeline.wait_for_frames()
+        split_data = np.array_split(image_data, 3)
+        try:
+            data, address = self.server_socket.recvfrom(4096)
 
-		color_frame = frames.get_color_frame()
+            self.server_socket.sendto(split_data[0].tobytes(), address)
+            self.server_socket.recvfrom(4096)
 
-		image_data = np.asarray(color_frame.get_data(), dtype=np.uint8)
+            self.server_socket.sendto(split_data[1].tobytes(), address)
+            self.server_socket.recvfrom(4096)
 
-		result_image, center = self.detect_aruco_corners(image_data)
+            self.server_socket.sendto(split_data[2].tobytes(), address)
+            self.server_socket.recvfrom(4096)
+            #print("Sent")
 
-		msg.data = int(center[0])
-
-		self.publisher.publish(msg)
-
-		compressed_data = self.bridge.cv2_to_compressed_imgmsg(result_image, 'jpg').data
-
-		image_data = np.asarray(compressed_data, dtype=np.uint8)
-
-		split_data = np.array_split(image_data, 3)
-		try:
-			data, address = self.server_socket.recvfrom(4096)
-
-			self.server_socket.sendto(split_data[0].tobytes(), address)
-			self.server_socket.recvfrom(4096)
-
-			self.server_socket.sendto(split_data[1].tobytes(), address)
-			self.server_socket.recvfrom(4096)
-
-			self.server_socket.sendto(split_data[2].tobytes(), address)
-			self.server_socket.recvfrom(4096)
-			#print("Sent")
-
-		except TimeoutError:
-			print("Timeout")
-			signal.alarm(0)
-			return
+        except TimeoutError:
+            print("Timeout")
+            signal.alarm(0)
+            return
 
 
 def main(args=None):
-	rclpy.init(args=args)
+    rclpy.init(args=args)
 
-	aruco_publisher = ArucoPublisher()
+    aruco_publisher = ArucoPublisher()
 
-	try:
-		rclpy.spin(aruco_publisher)
-	except KeyboardInterrupt:
-		aruco_publisher.server_socket.close()
+    try:
+        rclpy.spin(aruco_publisher)
+    except KeyboardInterrupt:
+        aruco_publisher.server_socket.close()
 
-	aruco_publisher.destroy_node()
+    aruco_publisher.destroy_node()
 
 
 if __name__ == '__main__':
-	main()
+    main()

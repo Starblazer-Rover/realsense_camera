@@ -63,3 +63,36 @@ class ImagePublisher(Node):
         if color_frame.is_video_frame():
             image_msg = self.create_image(color_frame)
             self.__image_publisher.publish(image_msg)
+
+
+def __initialize_camera():
+    # Initializes the camera for all the frames being analyzed
+
+    camera_pipeline = rs.pipeline()
+    camera_config = rs.config()
+
+    #camera_config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
+    camera_config.enable_stream(rs.stream.color, 640, 480, rs.format.rgb8, 30)
+    camera_pipeline.start(camera_config)
+        
+
+    return camera_pipeline
+
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    pipeline = __initialize_camera()
+
+    node = ImagePublisher(pipeline)
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+
+
+if __name__ == '__main__':
+    main()

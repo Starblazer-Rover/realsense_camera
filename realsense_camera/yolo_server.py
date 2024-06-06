@@ -5,10 +5,14 @@ from cv_bridge import CvBridge
 import signal
 import zlib
 
+import cv2
+from ultralytics import YOLO
+
 import rclpy
 from rclpy.node import Node
 
 from sensor_msgs.msg import Image
+
 
 class ImageServer(Node):
 
@@ -19,9 +23,13 @@ class ImageServer(Node):
 		signal.alarm(0)
 
 		self.image_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-		self.image_address = ('192.168.1.11', 12345)
+		self.image_address = ('192.168.1.60', 12345)
 
 		self.bridge = CvBridge()
+
+		weights_path = '/home/billee/yolov9/weights/yolov9-e.pt'
+
+		self.model = YOLO(weights_path)
 
 		self.image_subscriber = self.create_subscription(Image, '/camera/Image_raw', self.timer_callback, 10)
 
@@ -30,14 +38,31 @@ class ImageServer(Node):
 
 	def timeout_handler(self, signum, frame):
 		raise TimeoutError()
+	
+	def predict_and_detect(self, img, rectangle_thickness=2, text_thickness=1):
+		results = self.model.predict(img)
 
+		print('got_results')
+
+		for result in results:
+			for box in result.boxes:
+				cv2.rectangle(img, (int(box.xyxy[0][0]), int(box.xyxy[0][1])),
+						(int(box.xyxy[0][2]), int(box.xyxy[0][3])), (255, 0, 0), rectangle_thickness)
+				
+				cv2.putText(img, f"{result.names[int(box.cls[0])]}",
+                        (int(box.xyxy[0][0]), int(box.xyxy[0][1]) - 10),
+                        cv2.FONT_HERSHEY_PLAIN, 1, (255, 0, 0), text_thickness)
+				
+		return img, results
+	
 	def timer_callback(self, msg):
 
 		data = self.bridge.imgmsg_to_cv2(msg)
 
+		data = self.predict_and_detect(data)
 
 		try:
-			signal.alarm(1)
+			signal.alarm(0)
 
 			image_data = np.asarray(data, dtype=np.int32)
 
