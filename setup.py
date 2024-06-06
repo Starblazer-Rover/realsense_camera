@@ -21,13 +21,12 @@ setup(
     entry_points={
         'console_scripts': [
             'camera = realsense_camera.realsense_publisher:main',
-            'uncompress = realsense_camera.uncompress_image:main',
-            'calibration = realsense_camera.imu_calibration:main',
-            'depth = realsense_camera.pointcloud_publisher:main',
-            'server = realsense_camera.image_server:main',
-            'client = realsense_camera.camera_client:main',
+            'image_server = realsense_camera.image_server:main',
+            'image_client = realsense_camera.camera_client:main',
             'uv_client = realsense_camera.uv_client:main',
-            'test = realsense_camera.test_publisher:main'
+            'depth_server = realsense_camera.depth_server:main',
+            'depth_client = realsense_camera.depth_client:main',
+            'picture = realsense_camera.picture:main',
         ],
     },
 )
