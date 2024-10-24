@@ -23,10 +23,8 @@ setup(
             'camera = realsense_camera.realsense_publisher:main',
             'image_server = realsense_camera.image_server:main',
             'image_client = realsense_camera.camera_client:main',
-            'uv_client = realsense_camera.uv_client:main',
             'depth_server = realsense_camera.depth_server:main',
             'depth_client = realsense_camera.depth_client:main',
-            'picture = realsense_camera.picture:main',
         ],
     },
 )
