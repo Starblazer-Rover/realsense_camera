@@ -14,14 +14,14 @@ ros2 run realsense_camera camera
 
 #### Published Topics:
 
-/camera/Image_raw
-/depth/PointCloud2_raw
+/camera/Image_raw  
+/depth/PointCloud2_raw  
 /depth/depth_raw
 
 #### Published Messages:
 
-sensor_msgs/Image
-sensor_msgs/PointCloud2
+sensor_msgs/Image  
+sensor_msgs/PointCloud2  
 std_msgs/UInt16MultiArray
 
 #### Description:
